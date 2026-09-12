@@ -1,0 +1,11 @@
+The program below allows us to take a user name and id and password (optional), and give them services. The services include:
+- Displaying account balance
+- Inserting cash to the account
+- Withdrawing cash from the account
+
+Let's focus on displaying account balance:
+1. Ask the user ID and password
+    - User gets 03 attempts before they're locked out for security reasons
+    - Account details are stored with user ID being the key
+3. Retrieve user account
+
