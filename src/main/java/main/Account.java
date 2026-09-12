@@ -1,13 +1,13 @@
-package repository;
+package main;
 
 import java.util.LinkedList;
 
-public class Accounts {
+public class Account {
 
     AccountsNodes accountsNodes = new AccountsNodes();
     LinkedList<AccountsNodes> id = new LinkedList<>();
 
-    public Accounts() {}
+    public Account() {}
 
     void addItems() {
 
