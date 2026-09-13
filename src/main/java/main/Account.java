@@ -1,62 +1,37 @@
 package main;
 
-import java.util.LinkedList;
-
 public class Account {
 
-    AccountsNodes accountsNodes = new AccountsNodes();
-    LinkedList<AccountsNodes> id = new LinkedList<>();
+    private int id;
+    private double balance;
+
 
     public Account() {}
 
-    void addItems() {
-
-        AccountsNodes accountNode1 = new AccountsNodes();
-        AccountsNodes accountNode2 = new AccountsNodes();
-        AccountsNodes accountNode3 = new AccountsNodes();
-
-        id.add(accountNode1);
-        id.add(accountNode2);
-        id.add(accountNode3);
-
+    public Account(int id) {
+        this.id = id;
     }
 
-    public double getBalance(int id) {
-        return 0.0;
+    public Account(int id, double balance) {
+        this.id = id;
+        this.balance = balance;
     }
 
-    void findAcc(int id) {
-        AccountsNodes accountsNodes = null;
 
-        for(int index = 0; index < this.id.size(); index++) {
-
-            if(id == this.id.get(index).getId())
-                accountsNodes = this.id.get(index);
-
-        }
+    public int getId() {
+        return id;
     }
 
-    class AccountsNodes {
+    public void setId(int id) {
+        this.id = id;
+    }
 
-        private int id;
-        private double balance;
+    public double getBalance() {
+        return balance;
+    }
 
-        public int getId() {
-            return id;
-        }
-
-        public void setId(int id) {
-            this.id = id;
-        }
-
-        public double getBalance() {
-            return balance;
-        }
-
-        public void setBalance(double balance) {
-            this.balance = balance;
-        }
-
+    public void setBalance(double balance) {
+        this.balance = balance;
     }
 
 }

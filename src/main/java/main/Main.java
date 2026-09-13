@@ -6,13 +6,12 @@ public class Main {
 
     public static void main(String[] args){
 
-        Account account = new Account();
+        AccountsDb account = new AccountsDb();
         Utility utility = new Utility();
-        String name, repName;
         int id, selection;
         Scanner input = new Scanner(System.in);
 
-        System.out.println("Enter your id: ");
+        System.out.print("Enter your id: ");
         id = input.nextInt();
         //Input validation here
 

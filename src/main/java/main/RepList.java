@@ -18,7 +18,7 @@ public class RepList {
     public Rep getAvailableRep() {
 
         Random rand = new Random();
-        int randomNum = rand.nextInt(4);
+        int randomNum = rand.nextInt(3);
 
         return repList.get(randomNum);
 
