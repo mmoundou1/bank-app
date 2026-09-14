@@ -34,10 +34,10 @@ public class Main {
 
             case 2: {
                 double amount;
-                System.out.println("How much would you like to deposit?");
+                System.out.print("How much would you like to deposit? ");
                 amount = input.nextDouble();
                 accountsDb.deposit(id, amount);
-                System.out.println("Your money was successfully deposited!");
+                System.out.println("\nYour money was successfully deposited!");
                 break;
             }
         }
