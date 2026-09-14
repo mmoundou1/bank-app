@@ -20,9 +20,9 @@ public class Main {
         System.out.println("I will be happy to assist you today!");
         System.out.println("How may I help?");
         System.out.println("\n");
-        System.out.print("Option 1 (balance)\n" +
-                                       "2. Deposit money\n" +
-                                                    "Option 3\n");
+
+        System.out.print("1. Check balance\n" +
+                                       "2. Deposit money\n" + "3. Withdraw money\n");
         selection = input.nextInt();
 
         switch(selection) {
@@ -33,6 +33,7 @@ public class Main {
             }
 
             case 2: {
+                deposit-money-feature
                 double amount;
                 System.out.print("How much would you like to deposit? ");
                 amount = input.nextDouble();
@@ -40,6 +41,7 @@ public class Main {
                 System.out.println("\nYour money was successfully deposited!");
                 break;
             }
+
         }
 
     }
