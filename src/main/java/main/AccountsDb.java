@@ -24,7 +24,7 @@ public class AccountsDb {
 
     }
 
-    private Account findAcc(int id) {
+    public Account findAcc(int id) {
         Account account = null;
 
         for(int index = 0; index < this.id.size(); index++) {
@@ -37,8 +37,5 @@ public class AccountsDb {
         return account;
     }
 
-    public void deposit(int id, double amount) {
-        findAcc(id).setBalance(amount);
-    }
 
 }

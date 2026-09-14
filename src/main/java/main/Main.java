@@ -37,7 +37,7 @@ public class Main {
                 double amount;
                 System.out.println("How much would you like to deposit?");
                 amount = input.nextDouble();
-                accountsDb.deposit(id, amount);
+                utility.deposit(id, amount);
                 System.out.println("Your money was successfully deposited!");
                 break;
             }
