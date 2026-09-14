@@ -37,5 +37,8 @@ public class AccountsDb {
         return account;
     }
 
+    public void deposit(int id, double amount) {
+        findAcc(id).setBalance(amount);
+    }
 
 }

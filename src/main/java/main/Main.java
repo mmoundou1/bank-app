@@ -6,7 +6,7 @@ public class Main {
 
     public static void main(String[] args){
 
-        AccountsDb account = new AccountsDb();
+        AccountsDb accountsDb = new AccountsDb();
         Utility utility = new Utility();
         int id, selection;
         Scanner input = new Scanner(System.in);
@@ -20,6 +20,7 @@ public class Main {
         System.out.println("I will be happy to assist you today!");
         System.out.println("How may I help?");
         System.out.println("\n");
+
         System.out.print("1. Check balance\n" +
                                        "2. Deposit money\n" + "3. Withdraw money\n");
         selection = input.nextInt();
@@ -27,12 +28,18 @@ public class Main {
         switch(selection) {
 
             case 1: {
-                    System.out.println("Your balance is: " + account.getBalance(id));
+                    System.out.println("Your balance is: " + accountsDb.getBalance(id));
                     break;
             }
 
             case 2: {
-
+                deposit-money-feature
+                double amount;
+                System.out.println("How much would you like to deposit?");
+                amount = input.nextDouble();
+                accountsDb.deposit(id, amount);
+                System.out.println("Your money was successfully deposited!");
+                break;
             }
 
         }
