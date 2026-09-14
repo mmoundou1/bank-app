@@ -33,12 +33,11 @@ public class Main {
             }
 
             case 2: {
-                deposit-money-feature
                 double amount;
-                System.out.println("How much would you like to deposit?");
+                System.out.print("How much would you like to deposit? ");
                 amount = input.nextDouble();
-                utility.deposit(id, amount);
-                System.out.println("Your money was successfully deposited!");
+                accountsDb.deposit(id, amount);
+                System.out.println("\nYour money was successfully deposited!");
                 break;
             }
 
