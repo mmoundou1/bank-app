@@ -41,6 +41,25 @@ public class Main {
                 break;
             }
 
+            case 3: {
+                boolean result;
+                do {
+                    double amount;
+
+                    System.out.print("How much would you like to withdraw? ");
+                    amount = input.nextDouble();
+                    result = utility.withdraw(id, amount, accountsDb);
+
+                    if (result)
+                        System.out.println("Your money was successfully withdrawn!");
+                    else
+                        System.out.println("There was an issue withdrawing your money. Please try again!");
+                }
+                while(!result);
+                break;
+
+            }
+
         }
 
     }

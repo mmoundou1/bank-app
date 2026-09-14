@@ -37,4 +37,12 @@ public class Utility {
         accountsDb.findAcc(id).setBalance(amount);
     }
 
+    public boolean withdraw(int id, double amount, AccountsDb accountsDb) {
+        if (amount > accountsDb.findAcc(id).getBalance())
+            return false;
+        accountsDb.findAcc(id).setBalance(accountsDb.findAcc(id).getBalance() - amount);
+
+        return true;
+    }
+
 }
