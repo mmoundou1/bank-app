@@ -6,9 +6,11 @@ public class Utility {
 
     private RepList repList;
     private LinkedList<Rep> innerRepList;
+    private AccountsDb accountsDb;
 
-    public Utility(RepList repList) {
+    public Utility(RepList repList, AccountsDb accountsDb) {
         this.repList = repList;
+        this.accountsDb = accountsDb;
     }
 
 
@@ -30,4 +32,9 @@ public class Utility {
         return repList.getAvailableRep();
 
     }
+
+    public void deposit(int id, double amount) {
+        accountsDb.findAcc(id).setBalance(amount);
+    }
+
 }
