@@ -33,7 +33,6 @@ public class Main {
             }
 
             case 2: {
-                deposit-money-feature
                 double amount;
                 System.out.print("How much would you like to deposit? ");
                 amount = input.nextDouble();
