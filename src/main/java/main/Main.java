@@ -6,8 +6,6 @@ public class Main {
 
     public static void main(String[] args){
 
-        AccountsDb accountsDb = new AccountsDb();
-        Utility utility = new Utility();
         RepDb repDb = new RepDb();
         RepService repService = new RepService(repDb);
         BankAccountsDb bankAccountsDb = new BankAccountsDb();
