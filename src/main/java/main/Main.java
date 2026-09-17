@@ -8,7 +8,8 @@ public class Main {
 
         AccountsDb accountsDb = new AccountsDb();
         Utility utility = new Utility();
-        RepService repService = new RepService();
+        RepDb repDb = new RepDb();
+        RepService repService = new RepService(repDb);
         int id, selection;
         Scanner input = new Scanner(System.in);
 
