@@ -6,9 +6,10 @@ public class Main {
 
     public static void main(String[] args){
 
-        BankAccountsDb bankAccountsDb = new BankAccountsDb();
-        BankService bankService = new BankService(bankAccountsDb);
-        RepService repService = new RepService();
+        AccountsDb accountsDb = new AccountsDb();
+        Utility utility = new Utility();
+        RepDb repDb = new RepDb();
+        RepService repService = new RepService(repDb);
         int id, selection;
         Scanner input = new Scanner(System.in);
 
