@@ -8,6 +8,7 @@ public class Main {
 
         AccountsDb accountsDb = new AccountsDb();
         Utility utility = new Utility();
+        RepService repService = new RepService();
         int id, selection;
         Scanner input = new Scanner(System.in);
 
@@ -15,8 +16,8 @@ public class Main {
         id = input.nextInt();
         //Input validation here
 
-        System.out.println("Hello, my name is: " + utility.findRep().getName());
-        System.out.println("\nID: " + utility.findRep().getId());
+        System.out.println("Hello, my name is: " + repService.getAvailableRep().getName());
+        System.out.println("\nID: " + repService.getAvailableRep().getId());
         System.out.println("I will be happy to assist you today!");
         System.out.println("How may I help?");
         System.out.println("\n");
