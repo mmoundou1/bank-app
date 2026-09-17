@@ -2,11 +2,11 @@ package main;
 
 import java.util.LinkedList;
 
-public class AccountsDb {
+public class BankAccountsDb {
 
     LinkedList<Account> id = new LinkedList<>();
 
-    public AccountsDb() {
+    public BankAccountsDb() {
 
         Account a = new Account(111, 250000.00);
         id.add(a);
@@ -14,14 +14,6 @@ public class AccountsDb {
         id.add(b);
         Account c = new Account(222, 350.00);
         id.add(c);
-    }
-
-    public double getBalance(int id) {
-
-        Account temp = findAcc(id);
-
-        return temp.getBalance();
-
     }
 
     public Account findAcc(int id) {

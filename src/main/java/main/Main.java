@@ -30,7 +30,7 @@ public class Main {
         switch(selection) {
 
             case 1: {
-                    System.out.println("Your balance is: " + accountsDb.getBalance(id));
+                    System.out.println("Your balance is: " + bankService.getBalance(id));
                     break;
             }
 
@@ -38,7 +38,7 @@ public class Main {
                 double amount;
                 System.out.print("How much would you like to deposit? ");
                 amount = input.nextDouble();
-                utility.deposit(id, amount);
+                bankService.deposit(id, amount);
                 System.out.println("\nYour money was successfully deposited!");
                 break;
             }
@@ -50,7 +50,7 @@ public class Main {
 
                     System.out.print("How much would you like to withdraw? ");
                     amount = input.nextDouble();
-                    result = utility.withdraw(id, amount, accountsDb);
+                    result = bankService.withdraw(id, amount, bankAccountsDb);
 
                     if (result)
                         System.out.println("Your money was successfully withdrawn!");

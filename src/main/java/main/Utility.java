@@ -6,11 +6,11 @@ public class Utility {
 
     private RepList repList;
     private LinkedList<Rep> innerRepList;
-    private AccountsDb accountsDb;
+    private BankAccountsDb bankAccountsDb;
 
-    public Utility(RepList repList, AccountsDb accountsDb) {
+    public Utility(RepList repList, BankAccountsDb bankAccountsDb) {
         this.repList = repList;
-        this.accountsDb = accountsDb;
+        this.bankAccountsDb = bankAccountsDb;
     }
 
 
@@ -28,13 +28,13 @@ public class Utility {
     }
 
     public void deposit(int id, double amount) {
-        accountsDb.findAcc(id).setBalance(amount);
+        bankAccountsDb.findAcc(id).setBalance(amount);
     }
 
-    public boolean withdraw(int id, double amount, AccountsDb accountsDb) {
-        if (amount > accountsDb.findAcc(id).getBalance())
+    public boolean withdraw(int id, double amount, BankAccountsDb bankAccountsDb) {
+        if (amount > bankAccountsDb.findAcc(id).getBalance())
             return false;
-        accountsDb.findAcc(id).setBalance(accountsDb.findAcc(id).getBalance() - amount);
+        bankAccountsDb.findAcc(id).setBalance(bankAccountsDb.findAcc(id).getBalance() - amount);
 
         return true;
     }
