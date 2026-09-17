@@ -8,6 +8,10 @@ public class Main {
 
         AccountsDb accountsDb = new AccountsDb();
         Utility utility = new Utility();
+        RepDb repDb = new RepDb();
+        RepService repService = new RepService(repDb);
+        BankAccountsDb bankAccountsDb = new BankAccountsDb();
+        BankService bankService = new BankService(bankAccountsDb);
         int id, selection;
         Scanner input = new Scanner(System.in);
 
@@ -15,8 +19,8 @@ public class Main {
         id = input.nextInt();
         //Input validation here
 
-        System.out.println("Hello, my name is: " + utility.findRep().getName());
-        System.out.println("\nID: " + utility.findRep().getId());
+        System.out.println("Hello, my name is: " + repService.getAvailableRep().getName());
+        System.out.println("\nID: " + repService.getAvailableRep().getId());
         System.out.println("I will be happy to assist you today!");
         System.out.println("How may I help?");
         System.out.println("\n");
@@ -28,7 +32,7 @@ public class Main {
         switch(selection) {
 
             case 1: {
-                    System.out.println("Your balance is: " + accountsDb.getBalance(id));
+                    System.out.println("Your balance is: " + bankService.getBalance(id));
                     break;
             }
 
@@ -36,9 +40,28 @@ public class Main {
                 double amount;
                 System.out.print("How much would you like to deposit? ");
                 amount = input.nextDouble();
-                accountsDb.deposit(id, amount);
+                bankService.deposit(id, amount);
                 System.out.println("\nYour money was successfully deposited!");
                 break;
+            }
+
+            case 3: {
+                boolean result;
+                do {
+                    double amount;
+
+                    System.out.print("How much would you like to withdraw? ");
+                    amount = input.nextDouble();
+                    result = bankService.withdraw(id, amount, bankAccountsDb);
+
+                    if (result)
+                        System.out.println("Your money was successfully withdrawn!");
+                    else
+                        System.out.println("There was an issue withdrawing your money. Please try again!");
+                }
+                while(!result);
+                break;
+
             }
 
         }
