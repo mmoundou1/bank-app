@@ -4,29 +4,26 @@ import java.util.LinkedList;
 
 public class BankAccountsDb {
 
-    LinkedList<Account> id = new LinkedList<>();
+    LinkedList<Account> accounts = new LinkedList<>();
 
     public BankAccountsDb() {
 
-        Account a = new Account(111, 250000.00);
-        id.add(a);
-        Account b = new Account(222, 10000.00);
-        id.add(b);
-        Account c = new Account(222, 350.00);
-        id.add(c);
+        Account a = new Account("mmoundou", "123Password", 250000.00);
+        accounts.add(a);
+        Account b = new Account("kcarl", "123Password", 10000.00);
+        accounts.add(b);
+        Account c = new Account("miaNia", "123Password", 350.00);
+        accounts.add(c);
     }
 
-    public Account findAcc(int id) {
-        Account account = null;
+    public Account findAcc(String userName, String password) {
 
-        for(int index = 0; index < this.id.size(); index++) {
-
-            if(id == this.id.get(index).getId())
-                account = this.id.get(index);
-
+        for(int index = 0; index < accounts.size(); index++) {
+            if(accounts.get(index).getUsername().equals(userName) && accounts.get(index).getPassword().equals(password)) {
+                return accounts.get(index);
+            }
         }
-
-        return account;
+        return null;
     }
 
 

@@ -11,24 +11,24 @@ public class BankService {
 
     }
 
-    public double getBalance(int id) {
+    public Account authenticate(String username, String password) {
 
-        Account temp = bankAccountsDb.findAcc(id);
-
-        return temp.getBalance();
+        return bankAccountsDb.findAcc(username, password);
 
     }
 
-    public void deposit(int id, double amount) {
-        bankAccountsDb.findAcc(id).setBalance(amount);
+    public double getBalance(Account account) {
+
+        return 0.0;
+
     }
 
-    public boolean withdraw(int id, double amount, BankAccountsDb bankAccountsDb) {
-        if (amount > bankAccountsDb.findAcc(id).getBalance())
-            return false;
-        bankAccountsDb.findAcc(id).setBalance(bankAccountsDb.findAcc(id).getBalance() - amount);
+    public void deposit(Account account, double amount) {
 
-        return true;
+    }
+
+    public boolean withdraw(Account account, double amount, BankAccountsDb bankAccountsDb) {
+        return false;
     }
 
 }

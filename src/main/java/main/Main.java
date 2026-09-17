@@ -6,15 +6,20 @@ public class Main {
 
     public static void main(String[] args){
 
+        Account account;
         RepDb repDb = new RepDb();
         RepService repService = new RepService(repDb);
         BankAccountsDb bankAccountsDb = new BankAccountsDb();
         BankService bankService = new BankService(bankAccountsDb);
-        int id, selection;
+        String userName, password;
+        int selection;
         Scanner input = new Scanner(System.in);
 
-        System.out.print("Enter your id: ");
-        id = input.nextInt();
+        System.out.print("Enter your username: ");
+        userName = input.next();
+        System.out.print("Enter your password: ");
+        password = input.next();
+        account = bankService.authenticate(userName, password);
         //Input validation here
 
         System.out.println("Hello, my name is: " + repService.getAvailableRep().getName());
@@ -30,7 +35,7 @@ public class Main {
         switch(selection) {
 
             case 1: {
-                    System.out.println("Your balance is: " + bankService.getBalance(id));
+                    System.out.println("Your balance is: " + bankService.getBalance(account));
                     break;
             }
 
@@ -38,7 +43,7 @@ public class Main {
                 double amount;
                 System.out.print("How much would you like to deposit? ");
                 amount = input.nextDouble();
-                bankService.deposit(id, amount);
+                bankService.deposit(account, amount);
                 System.out.println("\nYour money was successfully deposited!");
                 break;
             }
@@ -50,7 +55,7 @@ public class Main {
 
                     System.out.print("How much would you like to withdraw? ");
                     amount = input.nextDouble();
-                    result = bankService.withdraw(id, amount, bankAccountsDb);
+                    result = bankService.withdraw(account, amount, bankAccountsDb);
 
                     if (result)
                         System.out.println("Your money was successfully withdrawn!");
