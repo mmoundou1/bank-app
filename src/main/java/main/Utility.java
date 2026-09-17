@@ -16,20 +16,14 @@ public class Utility {
 
     public Utility() {
 
-        innerRepList = new LinkedList<>();
+        /*innerRepList = new LinkedList<>();
         repList = new RepList();
 
         innerRepList.add(new Rep("Matt", 111));
         innerRepList.add(new Rep("Stephanie", 222));
         innerRepList.add(new Rep("Jeremy", 333));
 
-        repList.setRepList(innerRepList);
-
-    }
-
-    public Rep findRep() {
-
-        return repList.getAvailableRep();
+        repList.setRepList(innerRepList);*/
 
     }
 
