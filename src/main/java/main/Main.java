@@ -10,6 +10,8 @@ public class Main {
         Utility utility = new Utility();
         RepDb repDb = new RepDb();
         RepService repService = new RepService(repDb);
+        BankAccountsDb bankAccountsDb = new BankAccountsDb();
+        BankService bankService = new BankService(bankAccountsDb);
         int id, selection;
         Scanner input = new Scanner(System.in);
 
