@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: bank-app
+  # Render injects DATABASE_URL. Absent locally, the app still starts:
+  # the health endpoint reports the database as unconfigured rather than failing.
+  datasource:
+    url: ${DATABASE_URL:}
+    hikari:
+      maximum-pool-size: 5              # Neon free tier has a modest connection ceiling
+      connection-timeout: 5000
+      initialization-fail-timeout: -1   # do not abort startup if the DB is unreachable (AVL-2)
+
+server:
+  port: ${PORT:8080}                    # Render injects PORT; binding to it is mandatory
+  shutdown: graceful
+
+# Single family timezone - CON-8, ADR-005. Never read the system default.
+app:
+  timezone: America/New_York
+
+logging:
+  level:
+    root: INFO

@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # Fast suite - the feedback loop. No containers, seconds not minutes.
+  fast:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+      - name: Run unit tests
+        run: mvn -B test
+
+  # Slow suite - container-backed. ADR-009 makes a container runtime a hard
+  # dependency, not a nicety. Kept separate so the fast loop stays fast:
+  # a suite slow enough to skip is a suite that gets skipped, and these are
+  # the tests guarding ledger integrity.
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+      - name: Confirm container runtime is available
+        run: docker version
+      - name: Run integration tests
+        run: mvn -B verify -DskipUnitTests=true
+
+  # Deploy is gated on both suites. Render auto-deploys from main, so this job
+  # exists to make the gate visible rather than to perform the deploy.
+  build-image:
+    name: Build container image
+    needs: [ fast, integration ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t bank-app:${{ github.sha }} .
