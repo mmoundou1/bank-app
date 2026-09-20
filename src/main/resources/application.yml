@@ -1,14 +1,30 @@
 spring:
   application:
     name: bank-app
-  # Render injects DATABASE_URL. Absent locally, the app still starts:
-  # the health endpoint reports the database as unconfigured rather than failing.
-  datasource:
-    url: ${DATABASE_URL:}
-    hikari:
-      maximum-pool-size: 5              # Neon free tier has a modest connection ceiling
-      connection-timeout: 5000
-      initialization-fail-timeout: -1   # do not abort startup if the DB is unreachable (AVL-2)
+
+  # No DataSource until MB-7 wires the schema.
+  #
+  # spring-boot-starter-jdbc is on the classpath (HealthController needs the
+  # JdbcTemplate type), and Spring Boot will therefore try to auto-configure a
+  # DataSource at startup. An empty spring.datasource.url is not read as
+  # "absent" - it is read as invalid, and the context fails with
+  # "Failed to determine a suitable driver class".
+  #
+  # Excluding the auto-configuration is what actually makes the app start with
+  # no database: HealthController's ObjectProvider then finds no JdbcTemplate
+  # and reports the database as "unconfigured", which is the honest answer.
+  #
+  # MB-7 removes this exclusion and restores the datasource block below.
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+
+  # Restored by MB-7, once DATABASE_URL points at Neon:
+  # datasource:
+  #   url: ${DATABASE_URL}
+  #   hikari:
+  #     maximum-pool-size: 5              # Neon free tier has a modest connection ceiling
+  #     connection-timeout: 5000
+  #     initialization-fail-timeout: -1   # do not abort startup if the DB is unreachable (AVL-2)
 
 server:
   port: ${PORT:8080}                    # Render injects PORT; binding to it is mandatory
