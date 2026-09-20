@@ -1,4 +1,4 @@
-package com.moundou.moundous_bank;
+package com.moundou.bank.health;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.ResponseEntity;
