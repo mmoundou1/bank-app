@@ -10,8 +10,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Fast suite. No container, no database. Runs on every commit. */
-@SpringBootTest
+/**
+ * Fast suite. No container, no database. Runs on every commit.
+ *
+ * DataSourceAutoConfiguration is excluded here rather than in application.yml:
+ * production must connect to Neon, but this test's purpose is to prove the
+ * health endpoint answers when no database exists at all - and CI has no
+ * DATABASE_URL to resolve.
+ */
+@SpringBootTest(properties =
+        "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration")
 @AutoConfigureMockMvc
 class HealthEndpointTests {
 
