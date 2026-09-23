@@ -6,7 +6,10 @@ WORKDIR /app
 COPY pom.xml .
 RUN mvn -B dependency:go-offline
 COPY src ./src
-RUN mvn -B clean package -DskipTests
+# -DskipUnitTests, not -DskipTests: the pom configures surefire's skip from the
+# skipUnitTests property, which overrides the standard -DskipTests flag. Tests
+# belong in CI (ci.yml), not in the image build.
+RUN mvn -B clean package -DskipUnitTests=true
 
 # ---- Runtime stage ----
 FROM eclipse-temurin:21-jre-alpine
