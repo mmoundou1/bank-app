@@ -58,11 +58,30 @@
       <artifactId>flyway-database-postgresql</artifactId>
     </dependency>
 
-    <!-- MB-9 adds: spring-boot-starter-security, spring-boot-starter-oauth2-client -->
+    <!-- Sign-in (ADR-006): Google over OpenID Connect through Spring Security's OAuth2
+         client. Sessions live in Postgres (Technical Design D4), so a restart or
+         redeploy does not sign everyone out (Auth.Login-4). -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-oauth2-client</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.session</groupId>
+      <artifactId>spring-session-jdbc</artifactId>
+    </dependency>
 
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-test</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
