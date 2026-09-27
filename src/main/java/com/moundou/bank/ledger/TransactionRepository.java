@@ -1,6 +1,7 @@
 package com.moundou.bank.ledger;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -49,11 +50,8 @@ import java.util.stream.Collectors;
  * taken before the wait and could approve a second repayment; do not raise the
  * isolation level on the approval transaction.
  *
- * <h2>Wiring</h2>
- * Deliberately not a Spring bean yet: nothing injects it in MB-7, and the fast suite's
- * context has no DataSource, so a bean needing one would fail to start there. MB-12
- * registers it when the first service needs it.
  */
+@Repository
 public class TransactionRepository {
 
     private static final String COLUMNS = """
@@ -100,6 +98,65 @@ public class TransactionRepository {
                 .param("corrects", t.correctsTransactionId())
                 .param("opening", t.openingBalance())
                 .param("submissionKey", t.submissionKey())
+                .update();
+    }
+
+    /**
+     * Inserts a pending transaction unless this member has already submitted one with
+     * the same submission key (Ledger.Entry-14, Technical Design D1).
+     *
+     * Returns true when the row was inserted, false when an earlier attempt already
+     * created it; the caller then answers with {@link #findBySubmissionKey}.
+     *
+     * Why ON CONFLICT rather than catching the duplicate-key error: in Postgres a failed
+     * statement aborts the whole transaction, so after a caught violation nothing more
+     * could be done in it. ON CONFLICT turns the duplicate into an ordinary "0 rows".
+     * It is also safe when two retries arrive together: the second waits for the first
+     * to commit, then inserts nothing.
+     */
+    public boolean insertIfNew(NewTransaction t) {
+        int inserted = jdbc.sql("""
+                INSERT INTO transaction (
+                    transaction_id, kind, creditor_id, debtor_id, amount_minor, currency,
+                    transaction_date, note, initiated_by, settles_transaction_id,
+                    corrects_transaction_id, is_opening_balance, submission_key)
+                VALUES (
+                    :id, :kind, :creditor, :debtor, :amount, :currency,
+                    :date, :note, :initiatedBy, :settles,
+                    :corrects, :opening, :submissionKey)
+                ON CONFLICT ON CONSTRAINT transaction_submission_key DO NOTHING
+                """)
+                .param("id", t.id())
+                .param("kind", t.kind().dbValue())
+                .param("creditor", t.creditor())
+                .param("debtor", t.debtor())
+                .param("amount", t.amountMinor())
+                .param("currency", t.currency().getCurrencyCode())
+                .param("date", t.transactionDate())
+                .param("note", t.note())
+                .param("initiatedBy", t.initiatedBy())
+                .param("settles", t.settlesTransactionId())
+                .param("corrects", t.correctsTransactionId())
+                .param("opening", t.openingBalance())
+                .param("submissionKey", t.submissionKey())
+                .update();
+        return inserted == 1;
+    }
+
+    /**
+     * Appends one row to the transition log (Data-5). {@code from} is null for the row
+     * that records creation as pending. Call it in the same database transaction as the
+     * change it records.
+     */
+    public void recordHistory(UUID transactionId, TransactionStatus from, TransactionStatus to, UUID actorId) {
+        jdbc.sql("""
+                INSERT INTO transaction_status_history (history_id, transaction_id, from_status, to_status, actor_id)
+                VALUES (:id, :transactionId, :from, :to, :actor)""")
+                .param("id", UUID.randomUUID())
+                .param("transactionId", transactionId)
+                .param("from", from == null ? null : from.dbValue())
+                .param("to", to.dbValue())
+                .param("actor", actorId)
                 .update();
     }
 
