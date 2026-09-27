@@ -41,6 +41,24 @@ The split is not tidiness. Integration tests run real Postgres in a container
 and prove things unit tests cannot - transaction atomicity (CON-3), and later
 the fault-injection cases of ADR-009.
 
+No container runtime? Point the slow suite at any Postgres 16 you can throw away.
+The database it names is wiped on every run:
+
+    IT_DATABASE_URL='jdbc:postgresql://localhost:5432/bank_it?user=bank' \
+      mvn verify -DskipUnitTests=true
+
+## Database
+
+The schema lives in Flyway migrations in `src/main/resources/db/migration` and is
+applied when the application starts (ADR-015). A migration is never edited once
+merged; a change is always a new file. Data access is plain SQL through
+`JdbcClient`, with no JPA.
+
+If the database cannot be reached at startup, the application logs an error and
+starts anyway, so it can serve its degraded mode (AVL-2); migrations then run at
+the next startup that reaches the database. A migration that fails on a reachable
+database still stops startup (`StartupMigration`).
+
 ## Deployment
 
 Built from the `Dockerfile` and deployed to Render on push to `main`.
@@ -59,6 +77,9 @@ and `MaxRAMPercentage` reads the container limit rather than the host's memory.
   the server's (CON-8, ADR-012). Timestamps are stored in UTC.
 - Approved ledger rows are **never updated or deleted**. Corrections are new
   compensating entries (ADR-003).
+- A repayment is approved only while **holding a lock on its loan**, loan first,
+  then the repayment (INT-5, `TransactionRepository`). There is deliberately no
+  unique constraint on `settles_transaction_id`.
 - **No user-facing text in templates or code.** Everything a member reads comes
   from `messages.properties` via `#{key}` (ADR-014, I18N-1). The build fails on a
   literal string or a missing key (`TemplateTextTests`). Release 1.0 is English
