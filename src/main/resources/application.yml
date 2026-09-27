@@ -33,6 +33,12 @@ server:
 # defaulted and validated in the initiating member's zone, stored on Member.time_zone.
 # There is deliberately no application-wide zone setting.
 
+bank:
+  ledger:
+    # Last day, inclusive, on which opening balances are accepted (Ledger.Entry-15, -16),
+    # judged in each member's own zone. Format 2026-10-31. Unset closes the window.
+    onboarding-ends-on: ${ONBOARDING_ENDS_ON:}
+
 logging:
   level:
     root: INFO

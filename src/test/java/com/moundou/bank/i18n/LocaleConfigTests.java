@@ -2,7 +2,7 @@ package com.moundou.bank.i18n;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.MessageSource;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.servlet.LocaleResolver;
@@ -13,14 +13,14 @@ import java.util.Locale;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Fast suite, no database (same exclusion as HealthEndpointTests).
+ * Fast suite, no database: a web slice, which loads the locale resolver and message
+ * source Spring Boot configures from application.yml, and nothing that needs Postgres.
  *
  * ADR-014 / I18N-2: Release 1.0 is English only and ignores the browser's language,
  * so a member whose phone is set to French never sees a half-translated screen and
  * a bug report reproduces the same text for everyone.
  */
-@SpringBootTest(properties =
-        "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration")
+@WebMvcTest
 class LocaleConfigTests {
 
     @Autowired
