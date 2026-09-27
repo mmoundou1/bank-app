@@ -6,3 +6,5 @@ target/
 .env
 .env.*
 .DS_Store
+# jqwik property-test run cache (ZeroSumPropertyTest); machine-local
+.jqwik-database

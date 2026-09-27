@@ -44,7 +44,20 @@
       <scope>runtime</scope>
     </dependency>
 
-    <!-- MB-7 adds: spring-boot-starter-data-jpa, flyway-core, flyway-database-postgresql -->
+    <!-- MB-7, ADR-015: versioned schema migrations in src/main/resources/db/migration,
+         applied on startup. Data access is plain SQL through JdbcClient (already in
+         spring-boot-starter-jdbc); there is deliberately no JPA. Versions come from the
+         Spring Boot parent. flyway-database-postgresql is Flyway 10's Postgres support,
+         split out of flyway-core. -->
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-database-postgresql</artifactId>
+    </dependency>
+
     <!-- MB-9 adds: spring-boot-starter-security, spring-boot-starter-oauth2-client -->
 
     <dependency>
