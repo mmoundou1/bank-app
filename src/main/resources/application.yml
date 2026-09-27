@@ -12,13 +12,26 @@ spring:
       connection-timeout: 5000
       initialization-fail-timeout: -1   # do not abort startup if the DB is unreachable (AVL-2)
 
+  # ADR-014: every user-facing string comes from messages.properties (I18N-1).
+  messages:
+    basename: messages
+    encoding: UTF-8
+    fallback-to-system-locale: false    # never let the server's locale leak into the UI
+
+  # ADR-014: English only in Release 1.0 (I18N-2). The browser's Accept-Language is
+  # deliberately ignored, so a French phone never sees a half-translated screen.
+  # Release 2.0 replaces this with a resolver that reads the member's stored preference.
+  web:
+    locale: en
+    locale-resolver: fixed
+
 server:
   port: ${PORT:8080}                    # Render injects PORT; binding to it is mandatory
   shutdown: graceful
 
-# Single family timezone - CON-8, ADR-005. Never read the system default.
-app:
-  timezone: America/New_York
+# Time zones are per member since ADR-012 (CON-8 as amended in SRS 1.5): dates are
+# defaulted and validated in the initiating member's zone, stored on Member.time_zone.
+# There is deliberately no application-wide zone setting.
 
 logging:
   level:

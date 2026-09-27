@@ -21,6 +21,8 @@
     <java.version>21</java.version>
     <skipUnitTests>false</skipUnitTests>
     <testcontainers.version>1.20.3</testcontainers.version>
+    <jsoup.version>1.18.1</jsoup.version>
+    <jqwik.version>1.9.0</jqwik.version>  <!-- built on JUnit Platform 1.10, matching Spring Boot 3.3 --> 
   </properties>
 
   <dependencies>
@@ -58,6 +60,20 @@
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- ADR-014 build check: parses templates to find literal user-facing text (T-I18N-1a). -->
+    <dependency>
+      <groupId>org.jsoup</groupId>
+      <artifactId>jsoup</artifactId>
+      <version>${jsoup.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <!-- Property-based tests: the zero-sum invariant, T-Int-7a (INT-3, INT-7). -->
+    <dependency>
+      <groupId>net.jqwik</groupId>
+      <artifactId>jqwik</artifactId>
+      <version>${jqwik.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
