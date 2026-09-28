@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.language}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="#{app.name}">Moundou's Bank</title>
+  <style>
+    body { font-family: system-ui, sans-serif; line-height: 1.5; max-width: 32rem; margin: 0 auto; padding: 1.5rem 1rem; }
+    button { font: inherit; padding: 0.5rem 1rem; }
+  </style>
+</head>
+<body>
+<main>
+  <h1 th:text="#{app.name}">Moundou's Bank</h1>
+  <p th:text="#{home.signedInAs(${displayName})}">Signed in as Ama</p>
+  <form th:action="@{/logout}" method="post">
+    <button type="submit" th:text="#{home.signOut}">Sign out</button>
+  </form>
+</main>
+</body>
+</html>

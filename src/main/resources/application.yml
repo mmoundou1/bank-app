@@ -25,15 +25,45 @@ spring:
     locale: en
     locale-resolver: fixed
 
+  # ADR-006: sign-in with Google over OpenID Connect. Spring already knows Google's
+  # endpoints; only this app's client id and secret are needed, from the Google Cloud
+  # console (MB-6). The "unset" defaults let the app start and deploy before they
+  # exist; signing in simply fails at Google until they are set.
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID:unset}
+            client-secret: ${GOOGLE_CLIENT_SECRET:unset}
+            scope: openid, email, profile
+
+  # Technical Design D4: sessions in Postgres, so a restart or redeploy keeps everyone
+  # signed in (Auth.Login-4). The tables come from Flyway (V2), never from Spring Session.
+  session:
+    jdbc:
+      initialize-schema: never
+
 server:
   port: ${PORT:8080}                    # Render injects PORT; binding to it is mandatory
   shutdown: graceful
+  forward-headers-strategy: framework   # Render ends TLS; trust its X-Forwarded-* headers (Technical Design 6)
+  servlet:
+    session:
+      timeout: 30d                      # Auth.Login-6: 30 days of inactivity
+      cookie:
+        http-only: true                 # page scripts cannot read it
+        secure: true                    # HTTPS only (COM-1); browsers still allow it on localhost
+        same-site: lax                  # lets the Google return and emailed links arrive signed in
 
 # Time zones are per member since ADR-012 (CON-8 as amended in SRS 1.5): dates are
 # defaulted and validated in the initiating member's zone, stored on Member.time_zone.
 # There is deliberately no application-wide zone setting.
 
 bank:
+  identity:
+    # The zone a member gets on first sign-in, until set to where they live (CON-8).
+    default-time-zone: ${DEFAULT_TIME_ZONE:America/New_York}
   ledger:
     # Last day, inclusive, on which opening balances are accepted (Ledger.Entry-15, -16),
     # judged in each member's own zone. Format 2026-10-31. Unset closes the window.
