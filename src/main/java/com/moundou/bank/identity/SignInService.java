@@ -1,6 +1,7 @@
 package com.moundou.bank.identity;
 
 import java.time.ZoneId;
+import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -42,13 +43,12 @@ public class SignInService {
     }
 
     public SignInResult signIn(GoogleIdentity identity) {
-        Optional<MemberAccount> memberAccount = members.findBySubject(identity.subject());
 
         if (!Boolean.TRUE.equals(identity.emailVerified())) {
             return new SignInResult.Refused(SignInResult.Reason.EMAIL_NOT_VERIFIED);
         }
 
-        String email = identity.email().toLowerCase();
+        String email = identity.email().toLowerCase(Locale.ROOT);
 
         if (!allowList.contains(email)) {
             return new SignInResult.Refused(SignInResult.Reason.NOT_ON_ALLOW_LIST);
@@ -61,12 +61,14 @@ public class SignInService {
             displayName = email.substring(0, email.indexOf('@'));
         }
 
+        Optional<MemberAccount> memberAccount = members.findBySubject(identity.subject());
         MemberAccount member;
+
         if (memberAccount.isEmpty()) {
             member = members.create(new NewMemberAccount(
                     identity.subject(),
-                    email,               // was identity.email().toLowerCase()
-                    displayName,         // was identity.fullName()
+                    email,
+                    displayName,
                     defaultTimeZone,
                     Role.FAMILY_MEMBER));
         } else {

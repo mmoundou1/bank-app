@@ -25,7 +25,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * green arrow beside the class name) or with {@code mvn test -Dtest=SignInServiceTests},
  * watch every test fail, then write {@link SignInService#signIn} until they all pass.
  */
-
 class SignInServiceTests {
 
     private static final ZoneId DEFAULT_ZONE = ZoneId.of("America/New_York");
