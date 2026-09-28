@@ -1,6 +1,7 @@
 package com.moundou.bank.identity;
 
 import java.time.ZoneId;
+import java.util.Optional;
 
 /**
  * Decides whether a person Google has just identified may enter, and who they are
@@ -41,6 +42,40 @@ public class SignInService {
     }
 
     public SignInResult signIn(GoogleIdentity identity) {
-        throw new UnsupportedOperationException("MB-9 exercise: not written yet");
+        Optional<MemberAccount> memberAccount = members.findBySubject(identity.subject());
+
+        if (!Boolean.TRUE.equals(identity.emailVerified())) {
+            return new SignInResult.Refused(SignInResult.Reason.EMAIL_NOT_VERIFIED);
+        }
+
+        String email = identity.email().toLowerCase();
+
+        if (!allowList.contains(email)) {
+            return new SignInResult.Refused(SignInResult.Reason.NOT_ON_ALLOW_LIST);
+        }
+
+        String displayName;
+        if (identity.fullName() != null) {
+            displayName = identity.fullName();
+        } else {
+            displayName = email.substring(0, email.indexOf('@'));
+        }
+
+        MemberAccount member;
+        if (memberAccount.isEmpty()) {
+            member = members.create(new NewMemberAccount(
+                    identity.subject(),
+                    email,               // was identity.email().toLowerCase()
+                    displayName,         // was identity.fullName()
+                    defaultTimeZone,
+                    Role.FAMILY_MEMBER));
+        } else {
+            member = memberAccount.get();
+        }
+
+        if (!member.active()) {
+            return new SignInResult.Refused(SignInResult.Reason.DEACTIVATED);
+        }
+        return new SignInResult.SignedIn(member);
     }
 }
