@@ -1,6 +1,8 @@
 package com.moundou.bank.web;
 
 import com.moundou.bank.identity.GoogleSignIn;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -27,6 +29,8 @@ import org.springframework.security.web.authentication.AuthenticationFailureHand
 @Configuration(proxyBeanMethods = false)
 public class SecurityConfig {
 
+    private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
+
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, GoogleSignIn googleSignIn) throws Exception {
         http
@@ -46,16 +50,27 @@ public class SecurityConfig {
     /**
      * Sends a refused sign-in to the sign-in page with the reason, so it can say why
      * (Auth.Login-5: "report that the account is no longer active"). Anything else that
-     * goes wrong with Google gets a general message.
+     * goes wrong with Google gets a general message on the page.
+     *
+     * Every failure is also logged (SEC-5), with Spring's error code and description:
+     * an expected refusal at INFO, anything else at WARN. Those fields name what went
+     * wrong ("invalid_token_response", "authorization_request_not_found", ...) and never
+     * contain tokens or secrets, so they are safe to log.
      */
     static AuthenticationFailureHandler refusalHandler() {
         return (request, response, exception) -> {
             String target = "/login?failed";
-            if (exception instanceof OAuth2AuthenticationException oauth) {
-                String code = oauth.getError().getErrorCode();
-                if (code.startsWith(GoogleSignIn.REFUSAL_PREFIX)) {
-                    target = "/login?refused=" + code.substring(GoogleSignIn.REFUSAL_PREFIX.length());
-                }
+            if (exception instanceof OAuth2AuthenticationException oauth
+                    && oauth.getError().getErrorCode().startsWith(GoogleSignIn.REFUSAL_PREFIX)) {
+                String reason = oauth.getError().getErrorCode().substring(GoogleSignIn.REFUSAL_PREFIX.length());
+                target = "/login?refused=" + reason;
+                log.info("Sign-in refused: {}", reason);
+            } else if (exception instanceof OAuth2AuthenticationException oauth) {
+                log.warn("Sign-in with Google failed: [{}] {}",
+                        oauth.getError().getErrorCode(), oauth.getError().getDescription());
+            } else {
+                log.warn("Sign-in with Google failed: {}: {}",
+                        exception.getClass().getSimpleName(), exception.getMessage());
             }
             response.sendRedirect(request.getContextPath() + target);
         };
