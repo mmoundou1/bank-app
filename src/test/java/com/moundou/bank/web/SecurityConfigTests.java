@@ -4,6 +4,9 @@ import com.moundou.bank.health.HealthController;
 import com.moundou.bank.identity.GoogleSignIn;
 import com.moundou.bank.identity.SignedInMember;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -36,6 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * member is simulated with Spring Security's test support.
  */
 @WebMvcTest({SignInController.class, HealthController.class})
+@ExtendWith(OutputCaptureExtension.class)
 @Import(SecurityConfig.class)
 class SecurityConfigTests {
 
@@ -122,5 +126,18 @@ class SecurityConfigTests {
         SecurityConfig.refusalHandler().onAuthenticationFailure(new MockHttpServletRequest(), other,
                 new OAuth2AuthenticationException(new OAuth2Error("invalid_token")));
         assertThat(other.getRedirectedUrl()).isEqualTo("/login?failed");
+    }
+
+    /** SEC-5: every failed sign-in is logged with its reason, and no token. */
+    @Test
+    void failedSignInsAreLoggedWithTheirReason(CapturedOutput output) throws Exception {
+        SecurityConfig.refusalHandler().onAuthenticationFailure(new MockHttpServletRequest(), new MockHttpServletResponse(),
+                new OAuth2AuthenticationException(new OAuth2Error("invalid_token_response",
+                        "An error occurred while attempting to retrieve the OAuth 2.0 Access Token Response", null)));
+        SecurityConfig.refusalHandler().onAuthenticationFailure(new MockHttpServletRequest(), new MockHttpServletResponse(),
+                new OAuth2AuthenticationException(new OAuth2Error(GoogleSignIn.REFUSAL_PREFIX + "not_on_allow_list")));
+
+        assertThat(output).contains("Sign-in with Google failed: [invalid_token_response] An error occurred");
+        assertThat(output).contains("Sign-in refused: not_on_allow_list");
     }
 }
