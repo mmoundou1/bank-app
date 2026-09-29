@@ -2,6 +2,8 @@ package com.moundou.bank.web;
 
 import com.moundou.bank.health.HealthController;
 import com.moundou.bank.identity.GoogleSignIn;
+import com.moundou.bank.identity.MemberAdministration;
+import com.moundou.bank.identity.Role;
 import com.moundou.bank.identity.SignedInMember;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,6 +50,9 @@ class SecurityConfigTests {
 
     @MockBean
     GoogleSignIn googleSignIn;   // never reached here: nobody actually signs in with Google
+
+    @MockBean
+    MemberAdministration administration;   // home reads the member's current name (MB-10)
 
     static SignedInMember ama() {
         OidcIdToken token = OidcIdToken.withTokenValue("token").subject("sub-ama")
@@ -104,7 +109,11 @@ class SecurityConfigTests {
 
     @Test
     void aSignedInMemberReachesHome() throws Exception {
-        mvc.perform(get("/").with(oidcLogin().oidcUser(ama())))
+        SignedInMember ama = ama();
+        org.mockito.Mockito.when(administration.findById(ama.memberId())).thenReturn(java.util.Optional.of(
+                new MemberAdministration.MemberSummary(ama.memberId(), "Ama", "ama@example.com", Role.FAMILY_MEMBER, true,
+                        java.time.ZoneId.of("Africa/Douala"))));
+        mvc.perform(get("/").with(oidcLogin().oidcUser(ama)))
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Signed in as Ama")));
     }

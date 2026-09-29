@@ -1,5 +1,6 @@
 package com.moundou.bank.ledger;
 
+import com.moundou.bank.NotPermittedException;
 import com.moundou.bank.support.LedgerFixtures;
 import com.moundou.bank.support.MutableClock;
 import com.moundou.bank.support.TestDatabase;

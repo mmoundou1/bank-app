@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security" lang="en">
+<head th:fragment="head(titleKey)">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="#{${titleKey}}">Page</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, sans-serif; line-height: 1.5; max-width: 40rem; margin: 0 auto; padding: 1rem; }
+    nav { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; margin-bottom: 1rem; }
+    nav form { margin: 0; }
+    h1 { font-size: 1.5rem; } h2 { font-size: 1.2rem; margin-top: 2rem; }
+    label { display: block; font-weight: 600; margin-top: 1rem; }
+    input, select, button { font: inherit; padding: 0.4rem 0.6rem; max-width: 100%; }
+    input[type=email], input[type=text], select { width: 100%; box-sizing: border-box; }
+    button { cursor: pointer; }
+    .hint { font-size: 0.9rem; opacity: 0.8; margin: 0.25rem 0; }
+    .error { color: #b00020; font-weight: 600; }
+    .message { border-left: 0.25rem solid currentColor; padding: 0.25rem 0.75rem; }
+    ul.rows { list-style: none; padding: 0; }
+    ul.rows > li { border-top: 1px solid #8884; padding: 0.6rem 0; display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; align-items: center; justify-content: space-between; }
+    ul.rows form { margin: 0; }
+    .muted { opacity: 0.7; }
+  </style>
+</head>
+<body>
+<nav th:fragment="nav">
+  <a th:href="@{/}" th:text="#{nav.home}">Home</a>
+  <a th:href="@{/profile}" th:text="#{nav.profile}">Profile</a>
+  <a sec:authorize="hasRole('FAMILY_ADMINISTRATOR')"
+     th:href="@{/admin}" th:text="#{nav.admin}">Administration</a>
+  <form th:action="@{/logout}" method="post"><button type="submit" th:text="#{home.signOut}">Sign out</button></form>
+</nav>
+</body>
+</html>

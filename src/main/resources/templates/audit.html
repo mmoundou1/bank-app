@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.language}">
+<head th:replace="~{layout :: head('audit.pageTitle')}"><title>Audit</title></head>
+<body>
+<nav th:replace="~{layout :: nav}"></nav>
+<main th:with="a=${audit.a()}, b=${audit.b()}">
+  <h1 th:text="#{audit.title(${a.displayName()}, ${b.displayName()})}">Between Ama and Ben</h1>
+  <p><a th:href="@{/admin}" th:text="#{audit.back}">Back</a></p>
+
+  <!-- The balance, stated as who owes whom, never by sign alone (USE-3) -->
+  <h2 th:text="#{audit.balance.heading}">Balance</h2>
+  <p th:if="${audit.balances().isEmpty()}" th:text="#{audit.balance.none}">No approved transactions</p>
+  <ul class="rows">
+    <li th:each="entry : ${audit.balances()}">
+      <span th:if="${entry.value > 0}"
+            th:text="#{audit.balance.owes(${b.displayName()}, ${a.displayName()}, ${@formats.amount(entry.value, entry.key)})}">Ben owes Ama $75.00</span>
+      <span th:if="${entry.value < 0}"
+            th:text="#{audit.balance.owes(${a.displayName()}, ${b.displayName()}, ${@formats.amount(-entry.value, entry.key)})}">Ama owes Ben</span>
+      <span th:if="${entry.value == 0}" th:text="#{audit.balance.settled(${entry.key.currencyCode})}">Settled</span>
+    </li>
+  </ul>
+
+  <!-- Every transaction between them, in any status (Auth.Roles-10) -->
+  <h2 th:text="#{audit.transactions.heading}">Transactions</h2>
+  <p th:if="${audit.transactions().isEmpty()}" th:text="#{audit.transactions.none}">None</p>
+  <ul class="rows">
+    <li th:each="t : ${audit.transactions()}"
+        th:with="creditor=${t.creditor() == a.id() ? a.displayName() : b.displayName()},
+                 debtor=${t.debtor() == a.id() ? a.displayName() : b.displayName()}">
+      <span>
+        <strong th:text="#{${'audit.kind.' + t.kind().dbValue()}(${creditor}, ${debtor})}">Ama lent to Ben</strong>
+        <span th:if="${t.openingBalance()}" class="hint" th:text="#{audit.openingBalance}">Opening balance</span><br>
+        <span class="hint" th:text="${@formats.date(t.transactionDate())}">Sep 28, 2026</span>
+        <span class="hint" aria-hidden="true">·</span>
+        <span class="hint" th:text="#{${'status.' + t.status().dbValue()}}">Approved</span>
+        <span th:if="${t.note() != null}" class="hint" aria-hidden="true">·</span>
+        <span th:if="${t.note() != null}" class="hint" th:text="${t.note()}">note</span>
+      </span>
+      <span th:text="${@formats.amount(t.amountMinor(), t.currency())}">$20.00</span>
+    </li>
+  </ul>
+</main>
+</body>
+</html>

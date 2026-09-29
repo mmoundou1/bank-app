@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.language}">
+<head th:replace="~{layout :: head('admin.title')}"><title>Administration</title></head>
+<body>
+<nav th:replace="~{layout :: nav}"></nav>
+<main>
+  <h1 th:text="#{admin.title}">Family administration</h1>
+  <p th:if="${messageKey}" class="message" role="status" th:text="#{${messageKey}(${messageArg})}">Done.</p>
+  <p th:if="${errorKey}" class="message error" role="alert" th:text="#{${errorKey}}">Refused.</p>
+
+  <!-- Who can sign in: the allow-list is how accounts are provisioned (Auth.Roles-8, TBD-2) -->
+  <h2 th:text="#{admin.allowList.heading}">Who can sign in</h2>
+  <p class="hint" th:text="#{admin.allowList.hint}">Hint</p>
+  <form th:action="@{/admin/allow-list}" method="post">
+    <label for="email" th:text="#{admin.allowList.email}">Email address</label>
+    <input id="email" name="email" type="email" autocomplete="off" th:value="${typedEmail}">
+    <p><button type="submit" th:text="#{admin.allowList.add}">Add</button></p>
+  </form>
+  <ul class="rows">
+    <li th:each="entry : ${overview.allowList()}">
+      <span>
+        <span th:text="${entry.email()}">ama@example.com</span><br>
+        <span class="hint" th:if="${entry.addedByName() != null}" th:text="#{admin.allowList.addedBy(${entry.addedByName()})}">Added by</span>
+      </span>
+      <form th:action="@{/admin/allow-list/remove}" method="post">
+        <input type="hidden" name="email" th:value="${entry.email()}">
+        <button type="submit" th:text="#{admin.allowList.remove}">Remove</button>
+      </form>
+    </li>
+  </ul>
+
+  <!-- Members: deactivation (Auth.Roles-3), separate from removing access (Data-7) -->
+  <h2 th:text="#{admin.members.heading}">Members</h2>
+  <p class="hint" th:text="#{admin.members.hint}">Hint</p>
+  <ul class="rows">
+    <li th:each="m : ${overview.members()}" th:classappend="${m.active()} ? '' : 'muted'">
+      <span>
+        <strong th:text="${m.displayName()}">Ama</strong>
+        <span th:if="${m.id() == me}" th:text="#{admin.members.you}">(you)</span><br>
+        <span class="hint" th:text="${m.email()}">ama@example.com</span><br>
+        <span class="hint" th:text="#{${'admin.role.' + m.role().dbValue()}}">Member</span>
+        <span class="hint" aria-hidden="true">·</span>
+        <span class="hint" th:text="#{${m.active() ? 'admin.status.active' : 'admin.status.deactivated'}}">Active</span>
+      </span>
+      <form th:if="${m.active()}" th:action="@{/admin/members/{id}/deactivate(id=${m.id()})}" method="post">
+        <input type="hidden" name="name" th:value="${m.displayName()}">
+        <button type="submit" th:text="#{admin.members.deactivate}">Deactivate</button>
+      </form>
+    </li>
+  </ul>
+
+  <!-- Dispute audit (Auth.Roles-10, UC-13) -->
+  <h2 th:text="#{admin.audit.heading}">Audit two members</h2>
+  <p class="hint" th:text="#{admin.audit.hint}">Hint</p>
+  <form th:action="@{/admin/audit}" method="get">
+    <label for="a" th:text="#{admin.audit.first}">First member</label>
+    <select id="a" name="a">
+      <option th:each="m : ${overview.members()}" th:value="${m.id()}" th:text="${m.displayName()}">Ama</option>
+    </select>
+    <label for="b" th:text="#{admin.audit.second}">Second member</label>
+    <select id="b" name="b">
+      <option th:each="m : ${overview.members()}" th:value="${m.id()}" th:text="${m.displayName()}">Ben</option>
+    </select>
+    <p><button type="submit" th:text="#{admin.audit.show}">Show</button></p>
+  </form>
+</main>
+</body>
+</html>

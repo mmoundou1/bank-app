@@ -36,6 +36,9 @@ public class SecurityConfig {
         http
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/healthz", "/login", "/error", "/css/**", "/favicon.ico").permitAll()
+                // Administrators only (Auth.Roles-5). The role is the one granted at sign-in;
+                // AdminService checks the database again on every call.
+                .requestMatchers("/admin/**").hasRole("FAMILY_ADMINISTRATOR")
                 .anyRequest().authenticated())
             .oauth2Login(login -> login
                 .loginPage("/login")
