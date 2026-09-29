@@ -73,6 +73,12 @@
       <groupId>org.springframework.session</groupId>
       <artifactId>spring-session-jdbc</artifactId>
     </dependency>
+    <!-- sec:authorize in templates: shows the administration link to administrators only.
+         Display only; the rule itself is enforced by SecurityConfig and AdminService. -->
+    <dependency>
+      <groupId>org.thymeleaf.extras</groupId>
+      <artifactId>thymeleaf-extras-springsecurity6</artifactId>
+    </dependency>
 
     <dependency>
       <groupId>org.springframework.boot</groupId>

@@ -1,5 +1,6 @@
 package com.moundou.bank.ledger;
 
+import com.moundou.bank.NotPermittedException;
 import com.moundou.bank.identity.Member;
 import com.moundou.bank.identity.MemberDirectory;
 import com.moundou.bank.notification.OutboxWriter;

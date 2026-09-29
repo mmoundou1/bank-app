@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * so a member whose phone is set to French never sees a half-translated screen and
  * a bug report reproduces the same text for everyone.
  */
-@WebMvcTest
+@WebMvcTest(com.moundou.bank.health.HealthController.class)   // any one controller: this tests locale beans, not screens
 class LocaleConfigTests {
 
     @Autowired

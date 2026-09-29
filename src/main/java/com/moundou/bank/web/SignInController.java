@@ -1,5 +1,7 @@
 package com.moundou.bank.web;
 
+import com.moundou.bank.identity.MemberAdministration;
+import com.moundou.bank.identity.Role;
 import com.moundou.bank.identity.SignedInMember;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -15,6 +17,12 @@ import java.util.Set;
  */
 @Controller
 class SignInController {
+
+    private final MemberAdministration administration;
+
+    SignInController(MemberAdministration administration) {
+        this.administration = administration;
+    }
 
     /** The refusal reasons the page has a message for; anything else gets the general one. */
     private static final Set<String> REASONS = Set.of("email_not_verified", "not_on_allow_list", "deactivated");
@@ -35,9 +43,15 @@ class SignInController {
         return "login";
     }
 
+    /**
+     * The name and role come from the database, not the session: the session holds what
+     * was true at sign-in, and the member may have renamed themselves since (Auth.Roles-11).
+     */
     @GetMapping("/")
     String home(@AuthenticationPrincipal SignedInMember member, Model model) {
-        model.addAttribute("displayName", member.displayName());
+        var me = administration.findById(member.memberId()).orElseThrow();
+        model.addAttribute("displayName", me.displayName());
+        model.addAttribute("administrator", me.role() == Role.FAMILY_ADMINISTRATOR);
         return "home";
     }
 }

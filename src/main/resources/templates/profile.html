@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.language}">
+<head th:replace="~{layout :: head('profile.title')}"><title>Profile</title></head>
+<body>
+<nav th:replace="~{layout :: nav}"></nav>
+<main>
+  <h1 th:text="#{profile.title}">Your profile</h1>
+  <p th:if="${messageKey}" class="message" role="status" th:text="#{${messageKey}}">Saved.</p>
+
+  <form th:action="@{/profile}" method="post" novalidate>
+    <label for="displayName" th:text="#{profile.displayName.label}">Your name</label>
+    <input id="displayName" name="displayName" type="text" maxlength="80" autocomplete="name"
+           th:value="${displayName}" th:attr="aria-describedby=${errors != null && errors.containsKey('displayName')} ? 'displayName-error' : null">
+    <p th:if="${errors != null && errors.containsKey('displayName')}" id="displayName-error" class="error"
+       th:text="#{${errors['displayName']}}">Enter your name</p>
+
+    <label for="timeZone" th:text="#{profile.timeZone.label}">Your time zone</label>
+    <p class="hint" th:text="#{profile.timeZone.hint}">Hint</p>
+    <select id="timeZone" name="timeZone">
+      <option th:each="zone : ${zones}" th:value="${zone}" th:text="${zone}" th:selected="${zone == timeZone}">Africa/Douala</option>
+    </select>
+    <p th:if="${errors != null && errors.containsKey('timeZone')}" class="error"
+       th:text="#{${errors['timeZone']}}">Choose a time zone</p>
+
+    <p><button type="submit" th:text="#{profile.save}">Save</button></p>
+  </form>
+</main>
+</body>
+</html>

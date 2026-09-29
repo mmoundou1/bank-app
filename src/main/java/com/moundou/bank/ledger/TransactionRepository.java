@@ -8,10 +8,12 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Comparator;
 import java.util.Currency;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -175,6 +177,38 @@ public class TransactionRepository {
                 .param("key", submissionKey)
                 .query(TransactionRepository::mapRow)
                 .optional();
+    }
+
+    /**
+     * Every transaction between two members, in any status and either direction, newest
+     * first. For the administrator's audit view only (Auth.Roles-10); the caller checks
+     * the role. Member-facing reads are always filtered by the member (SEC-2).
+     */
+    public List<LedgerTransaction> findBetween(UUID a, UUID b) {
+        return jdbc.sql("SELECT " + COLUMNS + " FROM transaction"
+                        + " WHERE (creditor_id = :a AND debtor_id = :b) OR (creditor_id = :b AND debtor_id = :a)"
+                        + " ORDER BY created_at DESC, transaction_id")
+                .param("a", a).param("b", b)
+                .query(TransactionRepository::mapRow).list();
+    }
+
+    /**
+     * The approved balance between two members in each currency, from {@code a}'s side:
+     * positive means {@code b} owes {@code a}. Read from the pair_net view (Technical
+     * Design 3), which stores each pair once, from the lower member id's side.
+     */
+    public Map<Currency, Long> pairBalances(UUID a, UUID b) {
+        Map<Currency, Long> balances = new TreeMap<>(Comparator.comparing(Currency::getCurrencyCode));
+        jdbc.sql("""
+                SELECT currency, a_net_minor, member_a FROM pair_net
+                 WHERE member_a = LEAST(:a, :b) AND member_b = GREATEST(:a, :b)""")
+                .param("a", a).param("b", b)
+                .query(rs -> {
+                    long net = rs.getLong("a_net_minor");
+                    boolean aIsLower = rs.getObject("member_a", UUID.class).equals(a);
+                    balances.put(Currency.getInstance(rs.getString("currency").strip()), aIsLower ? net : -net);
+                });
+        return balances;
     }
 
     /**
