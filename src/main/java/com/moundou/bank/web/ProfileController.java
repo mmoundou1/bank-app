@@ -25,11 +25,9 @@ import java.util.UUID;
 class ProfileController {
 
     private final ProfileService profiles;
-    private final EntryService entryService;
 
-    ProfileController(ProfileService profiles, EntryService entryService) {
+    ProfileController(ProfileService profiles) {
         this.profiles = profiles;
-        this.entryService = entryService;
     }
 
     @GetMapping("/profile")
@@ -53,12 +51,6 @@ class ProfileController {
                 yield form(model, displayName, timeZone);                // with what was typed
             }
         };
-    }
-
-    @PostMapping("/transaction-entry")
-    String transactionEntry(UUID initiatorId, EntryRequest entryRequest, Locale locale) {
-        entryService.submit(initiatorId, entryRequest, locale);
-        return "transaction-entry";
     }
 
     private static String form(Model model, String displayName, String timeZone) {
