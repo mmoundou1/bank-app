@@ -3,6 +3,8 @@ package com.moundou.bank.web;
 import com.moundou.bank.identity.ProfileRules;
 import com.moundou.bank.identity.ProfileService;
 import com.moundou.bank.identity.SignedInMember;
+import com.moundou.bank.ledger.EntryRequest;
+import com.moundou.bank.ledger.EntryService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -10,6 +12,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+
+import java.time.LocalDate;
+import java.util.Locale;
+import java.util.UUID;
 
 /**
  * The signed-in member's own profile (Auth.Roles-11, CR-16). The route has no member id
@@ -19,9 +25,11 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 class ProfileController {
 
     private final ProfileService profiles;
+    private final EntryService entryService;
 
-    ProfileController(ProfileService profiles) {
+    ProfileController(ProfileService profiles, EntryService entryService) {
         this.profiles = profiles;
+        this.entryService = entryService;
     }
 
     @GetMapping("/profile")
@@ -47,10 +55,18 @@ class ProfileController {
         };
     }
 
+    @PostMapping("/transaction-entry")
+    String transactionEntry(UUID initiatorId, EntryRequest entryRequest, Locale locale) {
+        entryService.submit(initiatorId, entryRequest, locale);
+        return "transaction-entry";
+    }
+
     private static String form(Model model, String displayName, String timeZone) {
         model.addAttribute("displayName", displayName);
         model.addAttribute("timeZone", timeZone);
         model.addAttribute("zones", ProfileRules.ZONES);
         return "profile";
     }
+
+
 }
