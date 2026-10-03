@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.language}">
+<head th:replace="~{layout :: head('entry.title')}"><title>Log a transaction</title></head>
+<body>
+<nav th:replace="~{layout :: nav}"></nav>
+<main>
+    <h1 th:text="#{entry.title}">Log a transaction</h1>
+
+    <!--/* Parser-level comment: Thymeleaf removes it, so it never reaches the browser.
+      The model, from EntryController:
+        submissionKey   UUID, sent back unchanged (Ledger.Entry-14)
+        counterparties  List<Member>, everyone you can choose
+        currencies      List<String>, e.g. EUR, USD, XAF
+        today           LocalDate, today in your time zone
+      Only after a rejected POST:
+        entry           the EntryRequest as typed, so nothing is lost (UI-4)
+        errors          Map: field name -> message key (EntryValidator's field names)
+      Every input's name matches a component of EntryRequest, which is how Spring
+      builds the record on POST.
+    */-->
+    <form th:action="@{/transactions}" method="post" novalidate>
+        <input type="hidden" name="submissionKey" th:value="${submissionKey}">
+        <!-- Opening balances (Ledger.Entry-15) are not offered on this form yet -->
+        <input type="hidden" name="openingBalance" value="false">
+
+        <!-- Who: Ledger.Entry-1, -3 -->
+        <label for="counterpartyId" th:text="#{entry.counterparty.label}">With whom</label>
+        <select id="counterpartyId" name="counterpartyId">
+            <option value="" th:text="#{entry.counterparty.choose}">Choose a member</option>
+            <option th:each="m : ${counterparties}" th:value="${m.id()}" th:text="${m.displayName()}"
+                    th:selected="${entry?.counterpartyId() == m.id()}">Ama</option>
+        </select>
+        <p th:if="${errors?.containsKey('counterparty')}" class="error" th:text="#{${errors['counterparty']}}">Error</p>
+
+        <!-- Which way the money went. Ignored for a split, where you paid -->
+        <fieldset>
+            <legend th:text="#{entry.role.label}">What happened</legend>
+            <label><input type="radio" name="role" value="LENDER" th:checked="${entry?.role()?.name() == 'LENDER'}">
+                <span th:text="#{entry.role.lender}">I lent money</span></label>
+            <label><input type="radio" name="role" value="BORROWER" th:checked="${entry?.role()?.name() == 'BORROWER'}">
+                <span th:text="#{entry.role.borrower}">I borrowed money</span></label>
+        </fieldset>
+        <p th:if="${errors?.containsKey('role')}" class="error" th:text="#{${errors['role']}}">Error</p>
+
+        <!-- Split the bill: Ledger.Entry-7, -11 -->
+        <!-- An unticked box sends nothing; "_split" tells Spring to read that as false -->
+        <input type="hidden" name="_split" value="on">
+        <label><input type="checkbox" name="split" value="true" th:checked="${entry?.split()}">
+            <span th:text="#{entry.split.label}">Split a bill I paid</span></label>
+        <p class="hint" th:text="#{entry.split.hint}">Hint</p>
+
+        <!-- How much: Ledger.Entry-2, -13. Typed as text and parsed by Amounts -->
+        <label for="amountText" th:text="#{entry.amount.label}">Amount</label>
+        <input id="amountText" name="amountText" type="text" inputmode="decimal" autocomplete="off"
+               th:value="${entry?.amountText()}">
+        <p th:if="${errors?.containsKey('amount')}" class="error" th:text="#{${errors['amount']}}">Error</p>
+
+        <label for="currencyCode" th:text="#{entry.currency.label}">Currency</label>
+        <select id="currencyCode" name="currencyCode">
+            <option th:each="c : ${currencies}" th:value="${c}" th:text="#{${'entry.currency.' + c}}"
+                    th:selected="${entry?.currencyCode() == c}">US dollars</option>
+        </select>
+        <p th:if="${errors?.containsKey('currency')}" class="error" th:text="#{${errors['currency']}}">Error</p>
+
+        <!-- When: Ledger.Entry-8, -12. Today where you live; never later -->
+        <label for="date" th:text="#{entry.date.label}">Date</label>
+        <input id="date" name="date" type="date" th:max="${today}" th:value="${entry?.date() ?: today}">
+        <p th:if="${errors?.containsKey('date')}" class="error" th:text="#{${errors['date']}}">Error</p>
+
+        <label for="note" th:text="#{entry.note.label}">Note</label>
+        <input id="note" name="note" type="text" maxlength="200" autocomplete="off" th:value="${entry?.note()}">
+        <p class="hint" th:text="#{entry.note.hint}">Optional</p>
+
+        <p th:if="${errors?.containsKey('openingBalance')}" class="error" th:text="#{${errors['openingBalance']}}">Error</p>
+
+        <p><button type="submit" th:text="#{entry.submit}">Send for approval</button></p>
+    </form>
+</main>
+</body>
+</html>
