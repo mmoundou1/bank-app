@@ -5,6 +5,8 @@
 <nav th:replace="~{layout :: nav}"></nav>
 <main>
     <h1 th:text="#{entry.title}">Log a transaction</h1>
+    <p th:if="${messageKey}" class="message" role="status"
+       th:text="#{${messageKey}(${messageArgs[0]}, ${messageArgs[1]}, ${messageArgs[2]})}">Sent.</p>
 
     <!--/* Parser-level comment: Thymeleaf removes it, so it never reaches the browser.
       The model, from EntryController:

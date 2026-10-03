@@ -34,13 +34,13 @@ public final class EntryValidator {
     public static final String OPENING_BALANCE = "openingBalance";
 
     // Message keys. The three with SRS-mandated wording are checked by SrsMessageTests.
-    static final String COUNTERPARTY_REQUIRED = "ledger.entry.counterparty.required";
-    static final String COUNTERPARTY_SELF = "ledger.entry.counterparty.self";                // Ledger.Entry-3
-    static final String COUNTERPARTY_UNAVAILABLE = "ledger.entry.counterparty.unavailable";  // Auth.Roles-4
-    static final String ROLE_REQUIRED = "ledger.entry.role.required";
-    static final String CURRENCY_UNSUPPORTED = "ledger.entry.currency.unsupported";          // Ledger.Entry-13
-    static final String DATE_FUTURE = "ledger.entry.date.future";                            // Ledger.Entry-8
-    static final String OPENING_BALANCE_CLOSED = "ledger.entry.openingBalance.closed";        // Ledger.Entry-16
+    public static final String COUNTERPARTY_REQUIRED = "ledger.entry.counterparty.required";
+    public static final String COUNTERPARTY_SELF = "ledger.entry.counterparty.self";                // Ledger.Entry-3
+    public static final String COUNTERPARTY_UNAVAILABLE = "ledger.entry.counterparty.unavailable";  // Auth.Roles-4
+    public static final String ROLE_REQUIRED = "ledger.entry.role.required";
+    public static final String CURRENCY_UNSUPPORTED = "ledger.entry.currency.unsupported";          // Ledger.Entry-13
+    public static final String DATE_FUTURE = "ledger.entry.date.future";                            // Ledger.Entry-8
+    public static final String OPENING_BALANCE_CLOSED = "ledger.entry.openingBalance.closed";        // Ledger.Entry-16
 
     /** The largest amount the schema holds: amount_minor is a Postgres integer (MB-7). */
     static final long MAX_MINOR_UNITS = Integer.MAX_VALUE;
