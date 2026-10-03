@@ -43,9 +43,9 @@ public class EntryController {
 
     @PostMapping("/transactions")
     String save(@AuthenticationPrincipal SignedInMember me,
-                            UUID initiatorId, EntryRequest entryRequest, Locale locale, RedirectAttributes redirect, Model model) {
+                EntryRequest entryRequest, Locale locale, RedirectAttributes redirect, Model model) {
 
-        return switch (entryService.submit(initiatorId, entryRequest, locale)) {
+        return switch (entryService.submit(me.memberId(), entryRequest, locale)) {
             case EntryService.Outcome.Recorded recorded -> {
                 LedgerTransaction t = recorded.transaction();
 
