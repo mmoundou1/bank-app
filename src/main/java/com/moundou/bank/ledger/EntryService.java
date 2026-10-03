@@ -80,6 +80,10 @@ public class EntryService {
         };
     }
 
+    public UUID submissionKey() {
+        return UUID.randomUUID();
+    }
+
     private Outcome record(NewTransaction t) {
         if (!transactions.insertIfNew(t)) {
             // Two retries raced past the check above; the other one saved it.
