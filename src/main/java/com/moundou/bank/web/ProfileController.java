@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
-
 /**
  * The signed-in member's own profile (Auth.Roles-11, CR-16). The route has no member id
  * in it: whose profile it is comes only from the session.
@@ -54,6 +53,4 @@ class ProfileController {
         model.addAttribute("zones", ProfileRules.ZONES);
         return "profile";
     }
-
-
 }
