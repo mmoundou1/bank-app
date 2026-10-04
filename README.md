@@ -23,6 +23,10 @@ rather than being edited in directly.
 
 Backlog: Jira project **MB**.
 
+**New to the code?** Read [ARCHITECTURE.md](ARCHITECTURE.md) first: it maps packages,
+screens and stories to the code, and shows how to go from a requirement ID to the
+line that enforces it.
+
 ## Running locally
 
     mvn spring-boot:run          # starts on :8080, no database needed
