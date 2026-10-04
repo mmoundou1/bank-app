@@ -4,7 +4,6 @@ import com.moundou.bank.NotPermittedException;
 import com.moundou.bank.i18n.Formats;
 import com.moundou.bank.identity.Member;
 import com.moundou.bank.identity.MemberDirectory;
-import com.moundou.bank.identity.ProfileRules;
 import com.moundou.bank.identity.SignedInMember;
 import com.moundou.bank.ledger.*;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -16,7 +15,6 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.UUID;
 
 @Controller
