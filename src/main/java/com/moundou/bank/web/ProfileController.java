@@ -3,8 +3,6 @@ package com.moundou.bank.web;
 import com.moundou.bank.identity.ProfileRules;
 import com.moundou.bank.identity.ProfileService;
 import com.moundou.bank.identity.SignedInMember;
-import com.moundou.bank.ledger.EntryRequest;
-import com.moundou.bank.ledger.EntryService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -13,9 +11,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
-import java.time.LocalDate;
-import java.util.Locale;
-import java.util.UUID;
 
 /**
  * The signed-in member's own profile (Auth.Roles-11, CR-16). The route has no member id
