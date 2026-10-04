@@ -103,7 +103,7 @@ All code is under `src/main/java/com/moundou/bank/`.
 | `SignedInMember` | Who is signed in, as stored in the session. Controllers get it with `@AuthenticationPrincipal`; `memberId()` is the "actor" every service needs. |
 | `GoogleIdentity`, `SignInResult`, `NewMemberAccount` | Plain data passed in and out of `SignInService`. |
 | `AllowList` / `JdbcAllowList`, `MemberAccounts` / `JdbcMemberAccounts` | Data access for sign-in. Each is an interface plus a database version, so `SignInServiceTests` can swap in in-memory versions. |
-| `MemberDirectory` | How *other* modules look up a member (name, time zone, active). The ledger asks here and never reads the `member` table itself. |
+| `MemberDirectory` | How *other* modules look up a member (name, time zone, active), and who can be chosen as counterparty (`counterpartiesFor`). The ledger and the entry screen ask here and never read the `member` table themselves. |
 | `Member`, `MemberAccount`, `Role` | Member records. `Member` is the ledger's view; `MemberAccount` adds the role. |
 | `AdminService` | Administrator operations: the allow-list, deactivation, and the "last administrator" rule. |
 | `MemberAdministration` | SQL for administration and profiles, including the row lock behind the "last administrator" rule. |
@@ -133,6 +133,7 @@ All code is under `src/main/java/com/moundou/bank/`.
 |---|---|---|
 | `SignInController` | `GET /login`, `GET /` | `login.html`, `home.html` |
 | `ProfileController` | `GET`/`POST /profile` | `profile.html` |
+| `EntryController` | `GET /transactions/new`, `POST /transactions` | `transactions-new.html` |
 | `AdminController` | `/admin`, `/admin/allow-list`, `/admin/allow-list/remove`, `/admin/members/{id}/deactivate`, `/admin/audit` | `admin.html`, `audit.html` |
 | `SecurityConfig` | Decides which routes are open, which need sign-in, and which need the administrator role | |
 
@@ -201,7 +202,7 @@ Tests sit in `src/test/java` under the same package as the class they test.
 | MB-7 Schema and migrations | Done | `db/migration/V1`, `TransactionRepository`, `ops/StartupMigration` |
 | MB-9 Sign-in | In progress (awaiting a check that sessions survive redeploys) | `identity/GoogleSignIn`, `SignInService`, `web/SecurityConfig`, `SignInController` |
 | MB-10 Roles and profile | In progress (awaiting a check on the live site) | `identity/AdminService`, `ProfileService`, `MemberAdministration`, `ledger/AuditService`, `web/AdminController`, `ProfileController` |
-| MB-11 Transaction entry | **Service done, screen not started** | Done: `ledger/EntryService`, `EntryValidator`, `Amounts`, `EntryRequest`. See section 7 for the rest. |
+| MB-11 Transaction entry | In progress (screen built; follow-ups in section 7) | `ledger/EntryService`, `EntryValidator`, `Amounts`, `EntryRequest`; `web/EntryController`, `templates/transactions-new.html`; `identity/MemberDirectory.counterpartiesFor` |
 | MB-12 Approval | To do | Will add `TransactionStateMachine` (TD §5) and an approval service to `ledger`. `TransactionRepository.lockForUpdate` and `recordDecision` are ready for it. |
 | MB-13 Repayment | To do | `ledger`. `TransactionRepository.loanLifecycle` is ready for it. |
 | MB-14 History and corrections | To do | `ledger` |
@@ -211,23 +212,42 @@ Tests sit in `src/test/java` under the same package as the class they test.
 
 ---
 
-## 7. Where new code goes: the rest of MB-11
+## 7. MB-11: how the entry screen works, and what is left
 
-The service half of MB-11 is finished and tested. The screen half follows the
-same path as section 2, using the routes from TD §8:
+The screen follows section 2 exactly. `EntryController` reads the form into an
+`EntryRequest` (every input's `name` in the template matches a field of the record)
+and passes it to `EntryService.submit` with the actor from the session.
 
-| Piece | Where | Model it on |
-|---|---|---|
-| `GET /transactions/new`: show the form, with a fresh `submissionKey` in a hidden field and the member list for the counterparty dropdown | new `web/EntryController` | `ProfileController.page` |
-| `POST /transactions`: build an `EntryRequest` from the form and call `EntryService.submit(me.memberId(), request, locale)`. `Recorded` → redirect with a confirmation; `Rejected` → show the form again with the errors and the typed values | same controller | `ProfileController.save` |
-| The form | new `templates/transaction-new.html` | `profile.html` (fields, inline errors) |
-| Every label and hint | `messages.properties`, under a new `entry.*` group | the `profile.*` group |
-| `GET /transactions/new/split-preview`: shows "Ben will owe you $12.51" while typing a split | same controller; uses `EntryValidator.splitObligation` | *(htmx; new for this project)* |
-| Web tests: members only, CSRF required, errors shown beside fields, a retry recorded once | new `web/EntryWebTests` | `RolesAndProfileWebTests` |
+| Outcome | What the member sees |
+|---|---|
+| `Recorded` | A redirect to a **fresh** form with a confirmation above it: "Sent to Ben for approval: you lent them $20.00 on Sep 30, 2026." The direction comes from the saved transaction, never from the form. |
+| `Recorded` with `alreadyRecorded` | The same, but "This was already sent: …", naming the entry actually on record (Ledger.Entry-14). |
+| `Rejected` | The form again, with each error beside its field, what was typed kept, and the same submission key (nothing was saved). |
 
-The counterparty dropdown needs a list of active members other than you. No
-method returns that yet. It belongs in `MemberDirectory` (`identity`), because the
-web layer may not query `member` itself.
+Decisions worth knowing (recorded on MB-11 in Jira, 2026-10-03):
+
+- **Resending an old form** (pressing Back after a save) counts as a retry, because
+  the page still holds the old submission key. The confirmation therefore names
+  what was recorded, and the form page is never cached by the browser, so Back
+  usually fetches a fresh key. Detecting a changed resend is deferred.
+- **Checkboxes.** An unticked box sends nothing, so the template sends a hidden
+  `_split` marker that Spring reads as `false`. Without it, every unsplit entry
+  would fail to bind.
+- **Confirmation details travel as plain strings** in flash attributes, because
+  flash attributes are stored in the session, and sessions live in the database
+  and must be serializable.
+
+`EntryWebTests` covers all of the above; each test was checked by breaking the
+controller or template on purpose.
+
+**Still to do for MB-11:**
+
+| Piece | Where |
+|---|---|
+| Opening balances during onboarding (Ledger.Entry-15, -16): a checkbox shown only while the window is open. The template currently sends `openingBalance=false` | `EntryController` (is the window open?), `transactions-new.html` |
+| `GET /transactions/new/split-preview`: "Ben will owe you $12.51" while typing a split (UI-7) | `EntryController`; uses `EntryValidator.splitObligation`; htmx, new for this project |
+| The initiator's pending list (acceptance criterion: the item appears there) | Home page, with the dashboard (MB-15) |
+| USE-1: an entry in under 30 seconds on a real phone | Manual check after deploy |
 
 ---
 
