@@ -31,6 +31,15 @@ class ComputedMessageKeyTests {
         }
         for (TransactionKind kind : TransactionKind.values()) {
             keys.add("audit.kind." + kind.dbValue());
+            // queue.html and pending.html: the viewer is the row's creditor or debtor
+            for (String side : List.of("creditor", "debtor")) {
+                keys.add("item.toDecide." + kind.dbValue() + "." + side);
+                keys.add("item.sent." + kind.dbValue() + "." + side);
+            }
+            // pending.html: what a repayment repays, or what a correction reverses
+            if (kind != TransactionKind.LOAN) {
+                keys.add("pending.related." + kind.dbValue());
+            }
         }
         assertThat(keys).allSatisfy(key -> assertThat(bundle).as(key).containsKey(key));
     }

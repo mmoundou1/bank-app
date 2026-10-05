@@ -6,6 +6,8 @@
 <main>
   <h1 th:text="#{app.name}">Moundou's Bank</h1>
   <p th:text="#{home.signedInAs(${displayName})}">Signed in as Ama</p>
+  <div th:replace="~{layout :: flash}"></div>
+  <section th:replace="~{queue :: queue}"></section>
 </main>
 </body>
 </html>

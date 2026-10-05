@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.language}">
+<head th:replace="~{layout :: head('pending.title')}"><title>Pending item</title></head>
+<body>
+<nav th:replace="~{layout :: nav}"></nav>
+<!--/* One pending item: GET /pending/{id} (TD 8). The emailed alert links here
+  (Notify.Pending-2), so it must make sense on its own.
+
+  Model:
+    item     LedgerTransaction  the row, which the service has checked the viewer is a party to
+    names    Map<UUID, String>  display names of both parties
+    related  LedgerTransaction  optional: the loan a repayment settles, or the row a
+                                correction reverses
+  Flash, after a decision that did not apply: errorKey, e.g. ledger.approval.notPending.
+
+  Which buttons show is only a convenience. The service decides who may act
+  (Ledger.Approval-3, -11; TD 6), so a hand-made POST is still refused.
+
+  Routes posted to:
+    POST /pending/{id}/approve
+    POST /pending/{id}/decline       reason (optional, Ledger.Approval-7)
+    POST /transactions/{id}/cancel
+*/-->
+<main th:with="me=${#authentication.principal.memberId()},
+               side=${item.creditor() == me ? 'creditor' : 'debtor'},
+               other=${item.creditor() == me ? item.debtor() : item.creditor()},
+               mine=${item.initiatedBy() == me},
+               amount=${@formats.amount(item.amountMinor(), item.currency())}">
+  <h1 th:text="#{pending.title}">Pending item</h1>
+  <div th:replace="~{layout :: flash}"></div>
+
+  <!-- What it is, from the viewer's side (USE-3: direction in words) -->
+  <p>
+    <strong th:if="${mine}"
+            th:text="#{${'item.sent.' + item.kind().dbValue() + '.' + side}(${names.get(other)}, ${amount})}">You lent Ben $20.00</strong>
+    <strong th:unless="${mine}"
+            th:text="#{${'item.toDecide.' + item.kind().dbValue() + '.' + side}(${names.get(item.initiatedBy())}, ${amount})}">Ama says they lent you $20.00</strong>
+    <span th:if="${item.openingBalance()}" class="hint" th:text="#{audit.openingBalance}">(opening balance)</span>
+  </p>
+
+  <ul class="rows">
+    <li><span th:text="#{pending.date.label}">Date</span>
+        <span th:text="${@formats.date(item.transactionDate())}">Sep 28, 2026</span></li>
+    <li th:if="${item.note() != null}"><span th:text="#{pending.note.label}">Note</span>
+        <span th:text="${item.note()}">Groceries</span></li>
+    <li><span th:text="#{pending.status.label}">Status</span>
+        <span th:text="#{${'status.' + item.status().dbValue()}}">Pending approval</span></li>
+    <!-- What a repayment repays, or what a correction reverses -->
+    <li th:if="${related != null}">
+        <span th:text="#{${'pending.related.' + item.kind().dbValue()}(${@formats.amount(related.amountMinor(), related.currency())}, ${@formats.date(related.transactionDate())})}">This repays a loan of $20.00 from Sep 1, 2026</span></li>
+  </ul>
+
+  <th:block th:if="${item.status().name() == 'PENDING'}">
+    <!-- The counterparty decides: Ledger.Approval-3 -->
+    <th:block th:unless="${mine}">
+      <form th:action="@{/pending/{id}/approve(id=${item.id()})}" method="post">
+        <p class="hint" th:text="#{pending.approve.hint}">Your balances change as soon as you approve.</p>
+        <button type="submit" th:text="#{pending.approve}">Approve</button>
+      </form>
+
+      <h2 th:text="#{pending.decline.heading}">Not right?</h2>
+      <form th:action="@{/pending/{id}/decline(id=${item.id()})}" method="post">
+        <label for="reason" th:text="#{pending.decline.reason.label}">Reason</label>
+        <input id="reason" name="reason" type="text" maxlength="200" autocomplete="off">
+        <p class="hint" th:text="#{pending.decline.reason.hint(${names.get(item.initiatedBy())})}">Optional. Ama will see it.</p>
+        <p><button type="submit" th:text="#{pending.decline}">Decline</button></p>
+      </form>
+    </th:block>
+
+    <!-- The initiator may cancel while it is pending: Ledger.Approval-11, -12 -->
+    <th:block th:if="${mine}">
+      <p th:text="#{pending.waitingFor(${names.get(other)})}">Waiting for Ben to decide.</p>
+      <form th:action="@{/transactions/{id}/cancel(id=${item.id()})}" method="post">
+        <p class="hint" th:text="#{pending.cancel.hint(${names.get(other)})}">Cancelling removes it from Ben's list.</p>
+        <button type="submit" th:text="#{pending.cancel}">Cancel it</button>
+      </form>
+    </th:block>
+  </th:block>
+
+  <p><a th:href="@{/}" th:text="#{pending.back}">Back to home</a></p>
+</main>
+</body>
+</html>

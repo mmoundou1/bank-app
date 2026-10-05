@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<body>
+<!--/* The approval queue (UI-8, Ledger.Approval-1, -11). Shown on Home now, and later
+  served on its own for htmx as "queue :: queue" from GET /fragments/queue (TD 8).
+
+  Model:
+    toDecide  List<LedgerTransaction>  TransactionRepository.awaitingDecisionBy(me)
+    waiting   List<LedgerTransaction>  TransactionRepository.awaitingOthersFor(me)
+    names     Map<UUID, String>        display name of every member these rows mention
+  The section renders nothing when toDecide is absent, so Home works before the
+  controller provides it.
+
+  Each row is described from the viewer's side. "side" is whether the viewer is this
+  row's creditor or debtor (SRS 4.2), which together with the kind picks the wording,
+  e.g. item.toDecide.loan.debtor = "Ama says they lent you $20.00".
+*/-->
+<section th:fragment="queue" th:if="${toDecide != null}"
+         th:with="me=${#authentication.principal.memberId()}">
+
+  <h2 th:text="#{queue.toDecide.heading}">Waiting for your approval</h2>
+  <p th:if="${toDecide.isEmpty()}" class="muted" th:text="#{queue.toDecide.none}">Nothing is waiting for you.</p>
+  <ul class="rows">
+    <li th:each="t : ${toDecide}"
+        th:with="side=${t.creditor() == me ? 'creditor' : 'debtor'}">
+      <span>
+        <strong th:text="#{${'item.toDecide.' + t.kind().dbValue() + '.' + side}(${names.get(t.initiatedBy())}, ${@formats.amount(t.amountMinor(), t.currency())})}">Ama says they lent you $20.00</strong>
+        <span th:if="${t.openingBalance()}" class="hint" th:text="#{audit.openingBalance}">(opening balance)</span><br>
+        <span class="hint" th:text="${@formats.date(t.transactionDate())}">Sep 28, 2026</span>
+        <span th:if="${t.note() != null}" class="hint" aria-hidden="true">·</span>
+        <span th:if="${t.note() != null}" class="hint" th:text="${t.note()}">note</span>
+      </span>
+      <a th:href="@{/pending/{id}(id=${t.id()})}" th:text="#{queue.review}">Review</a>
+    </li>
+  </ul>
+
+  <h2 th:text="#{queue.waiting.heading}">Sent by you, waiting</h2>
+  <p th:if="${waiting.isEmpty()}" class="muted" th:text="#{queue.waiting.none}">Nothing you sent is waiting.</p>
+  <ul class="rows">
+    <li th:each="t : ${waiting}"
+        th:with="side=${t.creditor() == me ? 'creditor' : 'debtor'},
+                 other=${t.creditor() == me ? t.debtor() : t.creditor()}">
+      <span>
+        <strong th:text="#{${'item.sent.' + t.kind().dbValue() + '.' + side}(${names.get(other)}, ${@formats.amount(t.amountMinor(), t.currency())})}">You lent Ben $20.00</strong><br>
+        <span class="hint" th:text="#{queue.waitingFor(${names.get(other)})}">Waiting for Ben</span>
+      </span>
+      <a th:href="@{/pending/{id}(id=${t.id()})}" th:text="#{queue.review}">Review</a>
+    </li>
+  </ul>
+</section>
+</body>
+</html>
