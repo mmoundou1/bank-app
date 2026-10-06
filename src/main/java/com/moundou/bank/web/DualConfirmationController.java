@@ -43,9 +43,9 @@ public class DualConfirmationController {
     }
 
     @PostMapping("/pending/{id}/decline")
-    public String transactionDeclined(@AuthenticationPrincipal SignedInMember me, @PathVariable UUID transactionId,
+    public String transactionDeclined(@AuthenticationPrincipal SignedInMember me, @PathVariable UUID id,
                                       String reason, RedirectAttributes redirect) {
-       dualConfirmationService.decline(me.memberId(), transactionId, reason);
+       dualConfirmationService.decline(me.memberId(), id, reason);
        redirect.addFlashAttribute("messageKey", "decision.declined");
 
        return "redirect:/";
@@ -53,7 +53,7 @@ public class DualConfirmationController {
 
     private String form(SignedInMember me, Model model) {
         model.addAttribute("items", dualConfirmationService.awaitingDecisionBy(me.memberId()));
-        return  "ledger.approval.notPending";
+        return  "pending";
     }
 
 }

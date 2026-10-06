@@ -49,27 +49,25 @@ public class DualConfirmationService {
                 .filter(Member::active)
                 .orElseThrow(() -> new NotPermittedException(actorId, "Member is inactive"));
 
-            LedgerTransaction item = transactions.lockForUpdate(transactionId)
+        LedgerTransaction item = transactions.lockForUpdate(transactionId)
                     .orElseThrow(() -> new NotPermittedException(actorId, "decline transaction " + transactionId));
 
-            if (actorId.equals(item.initiatedBy()) || (actorId.equals(item.creditor()) || actorId.equals(item.debtor())))
-                throw new NotPermittedException(actorId, "Action not permitted");
+        boolean isParty = actorId.equals(item.creditor()) || actorId.equals(item.debtor());
+        if (!isParty || actorId.equals(item.initiatedBy()))
+            throw new NotPermittedException(actorId, "Action not permitted");
 
-            if (item.status() == TransactionStatus.PENDING) {
-                if(reason.isEmpty())
-                    reason = null;
+        if (item.status() == TransactionStatus.PENDING) {
+            if(reason == null || reason.isBlank())
+                reason = null;
 
-                transactions.recordHistory(transactionId, TransactionStatus.PENDING, TransactionStatus.DECLINED, actorId);
-                transactions.recordDecision(transactionId, TransactionStatus.DECLINED, Instant.now(clock), reason);
-                outbox.enqueue(transactionId, item.initiatedBy(), OutboxWriter.AlertKind.SETTLEMENT_ALERT);
+            transactions.recordHistory(transactionId, TransactionStatus.PENDING, TransactionStatus.DECLINED, actorId);
+            transactions.recordDecision(transactionId, TransactionStatus.DECLINED, Instant.now(clock), reason);
+            outbox.enqueue(transactionId, item.initiatedBy(), OutboxWriter.AlertKind.SETTLEMENT_ALERT);
 
-                return new Outcome.Recorded(item);
+            return new Outcome.Recorded(item);
 
-            }
-            else
-                return new Outcome.Rejected("Not Pending");
-
-
-
+        }
+        else
+            return new Outcome.Rejected("ledger.approval.notPending");
     }
 }
