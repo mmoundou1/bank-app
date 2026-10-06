@@ -50,9 +50,9 @@ public class DualConfirmationController {
                                       String reason, RedirectAttributes redirect) {
        return switch (dualConfirmationService.decline(me.memberId(), id, reason)) {
                case DualConfirmationService.Outcome.Recorded recorded -> {
-                   UUID tempId = recorded.transaction().initiatedBy();
-                   Member member = members.findById(tempId)
-                                            .orElseThrow(() -> new NotPermittedException(tempId, "Member not found"));
+                   UUID initiatorId = recorded.transaction().initiatedBy();
+                   Member member = members.findById(initiatorId)
+                                            .orElseThrow();
 
                    redirect.addFlashAttribute("messageKey", "decision.declined");
                    redirect.addFlashAttribute("messageArgs", List.of(member.displayName()));
@@ -61,7 +61,7 @@ public class DualConfirmationController {
                }
 
                case DualConfirmationService.Outcome.Rejected rejected -> {
-                   redirect.addFlashAttribute("errorKeys", rejected.reason());
+                   redirect.addFlashAttribute("errorKey", rejected.reason());
                     yield "redirect:/pending/" + id;
                }
        };
