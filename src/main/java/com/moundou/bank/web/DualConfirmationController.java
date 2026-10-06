@@ -2,6 +2,7 @@ package com.moundou.bank.web;
 
 import com.moundou.bank.NotPermittedException;
 import com.moundou.bank.identity.Member;
+import com.moundou.bank.identity.MemberDirectory;
 import com.moundou.bank.identity.ProfileService;
 import com.moundou.bank.identity.SignedInMember;
 import com.moundou.bank.ledger.*;
@@ -23,9 +24,11 @@ import java.util.*;
 public class DualConfirmationController {
 
    private final DualConfirmationService dualConfirmationService;
+   private final MemberDirectory members;
 
-   DualConfirmationController(DualConfirmationService dualConfirmationService) {
+   DualConfirmationController(DualConfirmationService dualConfirmationService, MemberDirectory members) {
        this.dualConfirmationService = dualConfirmationService;
+       this.members = members;
    }
 
     @GetMapping("/pending/{id}")
@@ -45,10 +48,23 @@ public class DualConfirmationController {
     @PostMapping("/pending/{id}/decline")
     public String transactionDeclined(@AuthenticationPrincipal SignedInMember me, @PathVariable UUID id,
                                       String reason, RedirectAttributes redirect) {
-       dualConfirmationService.decline(me.memberId(), id, reason);
-       redirect.addFlashAttribute("messageKey", "decision.declined");
+       return switch (dualConfirmationService.decline(me.memberId(), id, reason)) {
+               case DualConfirmationService.Outcome.Recorded recorded -> {
+                   UUID tempId = recorded.transaction().initiatedBy();
+                   Member member = members.findById(tempId)
+                                            .orElseThrow(() -> new NotPermittedException(tempId, "Member not found"));
 
-       return "redirect:/";
+                   redirect.addFlashAttribute("messageKey", "decision.declined");
+                   redirect.addFlashAttribute("messageArgs", List.of(member.displayName()));
+
+                   yield "redirect:/";
+               }
+
+               case DualConfirmationService.Outcome.Rejected rejected -> {
+                   redirect.addFlashAttribute("errorKeys", rejected.reason());
+                    yield "redirect:/pending/" + id;
+               }
+       };
     }
 
     private String form(SignedInMember me, Model model) {

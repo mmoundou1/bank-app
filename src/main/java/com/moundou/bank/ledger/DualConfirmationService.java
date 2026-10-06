@@ -17,7 +17,6 @@ public class DualConfirmationService {
     public sealed interface Outcome {
         record Recorded(LedgerTransaction transaction) implements DualConfirmationService.Outcome {
         }
-
         record Rejected(String reason) implements DualConfirmationService.Outcome {
         }
     }
