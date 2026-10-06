@@ -36,11 +36,11 @@
   <form th:action="@{/logout}" method="post"><button type="submit" th:text="#{home.signOut}">Sign out</button></form>
 </nav>
 <!--/* Messages carried across a redirect as flash attributes (MB-12):
-     messageKey + messageArgs  what just happened; messageArgs is a List of strings, possibly empty
+     messageKey + messageArgs  what just happened; messageArgs is an optional List of strings
      errorKey                  why it did not happen, e.g. ledger.approval.notPending (no arguments) */-->
 <div th:fragment="flash" th:remove="tag">
   <p th:if="${messageKey}" class="message" role="status"
-     th:text="${#messages.msgWithParams(messageKey, messageArgs.toArray())}">Approved.</p>
+     th:text="${messageArgs == null ? #messages.msg(messageKey) : #messages.msgWithParams(messageKey, messageArgs.toArray())}">Approved.</p>
   <p th:if="${errorKey}" class="message error" role="alert" th:text="#{${errorKey}}">Transaction no longer pending</p>
 </div>
 </body>
