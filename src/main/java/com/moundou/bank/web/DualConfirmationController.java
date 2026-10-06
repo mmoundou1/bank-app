@@ -43,9 +43,9 @@ public class DualConfirmationController {
     }
 
     @PostMapping("/pending/{id}/decline")
-    public String transactionDeclined(@AuthenticationPrincipal SignedInMember me, LedgerTransaction transaction,
-                                      String reason, RedirectAttributes redirect) {
-       dualConfirmationService.decline(me.memberId(), transaction, reason);
+    public String transactionDeclined(@AuthenticationPrincipal SignedInMember me, @PathVariable UUID transactionId,
+                                      String reason, TransactionStatus status, RedirectAttributes redirect) {
+       dualConfirmationService.decline(me.memberId(), transactionId, status, reason);
        redirect.addFlashAttribute("messageKey", "decision.declined");
 
        return "redirect:/";
