@@ -44,23 +44,20 @@ public class DualConfirmationService {
     }
 
     @Transactional
-    public Outcome decline(UUID actorId, UUID transactionId, TransactionStatus status, String reason) {
+    public Outcome decline(UUID actorId, UUID transactionId, String reason) {
         Member actor = members.findById(actorId)
                 .filter(Member::active)
                 .orElseThrow(() -> new NotPermittedException(actorId, "Member is inactive"));
 
-        if (!(transactions.findById(transactionId)).isPresent()) {
-            throw new NotPermittedException(transactionId, "Transaction id not found");
-        } else {
-            LedgerTransaction temp = transactions.findById(transactionId).get();
+            LedgerTransaction item = transactions.lockForUpdate(transactionId)
+                    .orElseThrow(() -> new NotPermittedException(actorId, "decline transaction " + transactionId));
 
-            if (actorId.equals(temp.initiatedBy()))
-                throw new NotPermittedException(actorId, "Message");
+            if (actorId.equals(item.initiatedBy()) || (actorId.equals(item.creditor()) || actorId.equals(item.debtor())))
+                throw new NotPermittedException(actorId, "Action not permitted");
 
-            if (temp.status() == TransactionStatus.PENDING) {
-
-                LedgerTransaction item = transactions.lockForUpdate(transactionId)
-                        .orElseThrow(() -> new NotPermittedException(actorId, "decline transaction " + transactionId));
+            if (item.status() == TransactionStatus.PENDING) {
+                if(reason.isEmpty())
+                    reason = null;
 
                 transactions.recordHistory(transactionId, TransactionStatus.PENDING, TransactionStatus.DECLINED, actorId);
                 transactions.recordDecision(transactionId, TransactionStatus.DECLINED, Instant.now(clock), reason);
@@ -72,7 +69,7 @@ public class DualConfirmationService {
             else
                 return new Outcome.Rejected("Not Pending");
 
-        }
+
 
     }
 }
