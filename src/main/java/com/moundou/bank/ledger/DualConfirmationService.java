@@ -122,21 +122,28 @@ public class DualConfirmationService {
         return new DualConfirmationService.TransactionQueue(toDecide, waiting, names);
     }
 
-    public void cancel(UUID actorId, UUID transactionId) {
+    @Transactional
+    public Outcome cancel(UUID actorId, UUID transactionId) {
         Member actor = members.findById(actorId)
                 .filter(Member::active)
                 .orElseThrow(() -> new NotPermittedException(actorId, "Member is inactive"));
 
+        LedgerTransaction item = transactions.lockForUpdate(transactionId)
+                .orElseThrow(() -> new NotPermittedException(actorId, "cancel " + transactionId));
+
         if(!actor.id().equals(transactions.findById(transactionId).orElseThrow().initiatedBy()))
             throw new NotPermittedException(actorId, "Action not permitted");
 
-        LedgerTransaction item = transactions.lockForUpdate(transactionId)
-                .orElseThrow(() -> new NotPermittedException(actorId, "decline transaction " + transactionId));
+
 
         if (item.status() == TransactionStatus.PENDING) {
             transactions.recordHistory(transactionId, TransactionStatus.PENDING, TransactionStatus.CANCELLED, actor.id());
             transactions.recordDecision(transactionId, TransactionStatus.CANCELLED, Instant.now(clock), null);
+
+            return new Outcome.Recorded(item);
         }
+        else
+            return new Outcome.Rejected("ledger.approval.notPending");
 
     }
 
