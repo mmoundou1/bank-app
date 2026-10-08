@@ -65,8 +65,15 @@ public class DualConfirmationController {
        };
     }
 
-    private String form(LedgerTransaction transaction, Map<UUID, String> names, Model model) {
+    @PostMapping("/transactions/{id}/cancel")
+    public String cancel(@AuthenticationPrincipal SignedInMember me, RedirectAttributes redirect) {
+       redirect.addFlashAttribute("messageKey", "decision.cancelled");
+       redirect.addFlashAttribute("messageArgs", List.of());
 
+       return "redirect:/";
+    }
+
+    private String form(LedgerTransaction transaction, Map<UUID, String> names, Model model) {
        model.addAttribute("item", transaction);
        model.addAttribute("names", names);
 
