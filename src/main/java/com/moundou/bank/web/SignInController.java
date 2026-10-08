@@ -3,6 +3,7 @@ package com.moundou.bank.web;
 import com.moundou.bank.identity.MemberAdministration;
 import com.moundou.bank.identity.Role;
 import com.moundou.bank.identity.SignedInMember;
+import com.moundou.bank.ledger.DualConfirmationService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -19,9 +20,11 @@ import java.util.Set;
 class SignInController {
 
     private final MemberAdministration administration;
+    private final DualConfirmationService dualConfirmationService;
 
-    SignInController(MemberAdministration administration) {
+    SignInController(MemberAdministration administration, DualConfirmationService dualConfirmationService) {
         this.administration = administration;
+        this.dualConfirmationService = dualConfirmationService;
     }
 
     /** The refusal reasons the page has a message for; anything else gets the general one. */
@@ -50,8 +53,13 @@ class SignInController {
     @GetMapping("/")
     String home(@AuthenticationPrincipal SignedInMember member, Model model) {
         var me = administration.findById(member.memberId()).orElseThrow();
+        DualConfirmationService.TransactionQueue transactionQueue = dualConfirmationService.queue(member.memberId());
+
         model.addAttribute("displayName", me.displayName());
-        model.addAttribute("administrator", me.role() == Role.FAMILY_ADMINISTRATOR);
+        model.addAttribute("toDecide", transactionQueue.toDecide());
+        model.addAttribute("waiting", transactionQueue.waiting());
+        model.addAttribute("names", transactionQueue.names());
+
         return "home";
     }
 }

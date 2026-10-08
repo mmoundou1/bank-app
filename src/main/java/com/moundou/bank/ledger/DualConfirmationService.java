@@ -22,6 +22,9 @@ public class DualConfirmationService {
 
     public record View(LedgerTransaction transaction, Map<UUID, String> partiesMap) {}
 
+    public record TransactionQueue(List<LedgerTransaction> toDecide, List<LedgerTransaction> waiting,
+                                                                                            Map<UUID, String> names) {}
+
     private final TransactionRepository transactions;
     private final MemberDirectory members;
     private final Clock clock;
@@ -91,5 +94,30 @@ public class DualConfirmationService {
 
         return new DualConfirmationService.View(transaction, names);
 
+    }
+
+    public TransactionQueue queue(UUID actorId) {
+        Map<UUID, String> names = new HashMap<>();
+
+        Member actor = members.findById(actorId)
+                .filter(Member::active)
+                .orElseThrow(() -> new NotPermittedException(actorId, "Member is inactive"));
+
+        Set<UUID> allIds = new HashSet<>();
+
+        List<LedgerTransaction> toDecide = transactions.awaitingDecisionBy(actor.id());
+        for (LedgerTransaction item : toDecide)
+            allIds.add(item.id());
+        List<LedgerTransaction> waiting = transactions.awaitingOthersFor(actor.id());
+        for (LedgerTransaction item : waiting)
+            allIds.add(item.id());
+
+        for (UUID id : allIds) {
+            Member member = members.findById(id).orElseThrow();
+            String displayName = member.displayName();
+            names.put(id, displayName);
+        }
+
+        return new DualConfirmationService.TransactionQueue(toDecide, waiting, names);
     }
 }
