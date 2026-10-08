@@ -37,10 +37,6 @@ public class DualConfirmationService {
         this.outbox = outbox;
     }
 
-    public List<LedgerTransaction> awaitingDecisionBy(UUID memberId) {
-        return transactions.awaitingDecisionBy(memberId);
-    }
-
     @Transactional
     public Outcome approve(UUID actorId, UUID transactionId) {
         throw new UnsupportedOperationException("To be implemented");
@@ -73,13 +69,13 @@ public class DualConfirmationService {
             return new Outcome.Rejected("ledger.approval.notPending");
     }
 
-    public View view(UUID counterpartyId, UUID transactionId) {
-        Member counterparty = members.findById(counterpartyId)
+    public View view(UUID actorId, UUID transactionId) {
+        Member counterparty = members.findById(actorId)
                                     .filter(Member::active)
-                                    .orElseThrow(() -> new NotPermittedException(counterpartyId, "Member is inactive"));
+                                    .orElseThrow(() -> new NotPermittedException(actorId, "Member is inactive"));
         LedgerTransaction transaction = transactions
                                 .findById(transactionId)
-                                .orElseThrow(() -> new NotPermittedException(counterpartyId, "Transaction not found"));
+                                .orElseThrow(() -> new NotPermittedException(actorId, "Transaction not found"));
 
         boolean isParty = counterparty.id().equals(transaction.creditor())
                                                                     || counterparty.id().equals(transaction.debtor());
@@ -106,11 +102,16 @@ public class DualConfirmationService {
         Set<UUID> allIds = new HashSet<>();
 
         List<LedgerTransaction> toDecide = transactions.awaitingDecisionBy(actor.id());
-        for (LedgerTransaction item : toDecide)
-            allIds.add(item.id());
+        for (LedgerTransaction item : toDecide) {
+            allIds.add(item.creditor());
+            allIds.add(item.debtor());
+        }
+
         List<LedgerTransaction> waiting = transactions.awaitingOthersFor(actor.id());
-        for (LedgerTransaction item : waiting)
-            allIds.add(item.id());
+        for (LedgerTransaction item : waiting) {
+            allIds.add(item.creditor());
+            allIds.add(item.debtor());
+        }
 
         for (UUID id : allIds) {
             Member member = members.findById(id).orElseThrow();

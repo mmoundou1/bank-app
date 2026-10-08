@@ -1,7 +1,6 @@
 package com.moundou.bank.web;
 
 import com.moundou.bank.identity.MemberAdministration;
-import com.moundou.bank.identity.Role;
 import com.moundou.bank.identity.SignedInMember;
 import com.moundou.bank.ledger.DualConfirmationService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
