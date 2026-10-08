@@ -5,6 +5,7 @@ import com.moundou.bank.identity.GoogleSignIn;
 import com.moundou.bank.identity.MemberAdministration;
 import com.moundou.bank.identity.Role;
 import com.moundou.bank.identity.SignedInMember;
+import com.moundou.bank.ledger.DualConfirmationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;
@@ -53,6 +54,9 @@ class SecurityConfigTests {
 
     @MockBean
     MemberAdministration administration;   // home reads the member's current name (MB-10)
+
+    @MockBean
+    DualConfirmationService approvals;     // home shows the approval queue (MB-12)
 
     static SignedInMember ama() {
         OidcIdToken token = OidcIdToken.withTokenValue("token").subject("sub-ama")
@@ -113,6 +117,8 @@ class SecurityConfigTests {
         org.mockito.Mockito.when(administration.findById(ama.memberId())).thenReturn(java.util.Optional.of(
                 new MemberAdministration.MemberSummary(ama.memberId(), "Ama", "ama@example.com", Role.FAMILY_MEMBER, true,
                         java.time.ZoneId.of("Africa/Douala"))));
+        org.mockito.Mockito.when(approvals.queue(ama.memberId()))
+                .thenReturn(new DualConfirmationService.TransactionQueue(List.of(), List.of(), java.util.Map.of()));
         mvc.perform(get("/").with(oidcLogin().oidcUser(ama)))
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Signed in as Ama")));
