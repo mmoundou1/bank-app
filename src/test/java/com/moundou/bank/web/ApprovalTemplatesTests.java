@@ -76,6 +76,7 @@ class ApprovalTemplatesTests {
             model.addAttribute("item", mine ? AMA_REPAID_BEN : BEN_LENT_AMA);
             model.addAttribute("names", NAMES);
             model.addAttribute("errorKey", "ledger.approval.notPending");
+            model.addAttribute("approveReady", true);   // hidden in production until MB-12's PR 2
             return "pending";
         }
     }
