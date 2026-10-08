@@ -131,7 +131,7 @@ public class DualConfirmationService {
         LedgerTransaction item = transactions.lockForUpdate(transactionId)
                 .orElseThrow(() -> new NotPermittedException(actorId, "cancel " + transactionId));
 
-        if(!actor.id().equals(transactions.findById(transactionId).orElseThrow().initiatedBy()))
+        if(!actor.id().equals(item.initiatedBy()))
             throw new NotPermittedException(actorId, "Action not permitted");
 
 

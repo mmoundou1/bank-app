@@ -68,8 +68,6 @@ public class DualConfirmationController {
     @PostMapping("/transactions/{id}/cancel")
     public String cancel(@AuthenticationPrincipal SignedInMember me, @PathVariable UUID id, RedirectAttributes redirect) {
        DualConfirmationService.Outcome outcome = dualConfirmationService.cancel(me.memberId(), id);
-       redirect.addFlashAttribute("messageKey", "decision.cancelled");
-       redirect.addFlashAttribute("messageArgs", List.of());
 
         return switch (outcome) {
             case DualConfirmationService.Outcome.Recorded recorded -> {
@@ -86,14 +84,14 @@ public class DualConfirmationController {
                 name = member.displayName();
 
                 redirect.addFlashAttribute("messageKey", "decision.cancelled");
-                redirect.addFlashAttribute("messageArgs", name);
+                redirect.addFlashAttribute("messageArgs", List.of(name));
 
                 yield "redirect:/";
             }
 
             case DualConfirmationService.Outcome.Rejected rejected -> {
                 redirect.addFlashAttribute("errorKey", rejected.reason());
-                yield "redirect:/pending/{id}";
+                yield "redirect:/pending/" + id;
             }
         };
     }
