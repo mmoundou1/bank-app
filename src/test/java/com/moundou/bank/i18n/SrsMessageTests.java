@@ -27,6 +27,8 @@ class SrsMessageTests {
             "ledger.repayment.currency.mismatch", "Repayment must be in the loan's currency",                          // Ledger.Repayment-9
             "ledger.repayment.loan.notOutstanding", "This loan is no longer outstanding",                              // Ledger.Repayment-10
             "ledger.approval.notPending", "Transaction no longer pending",                                             // Ledger.Approval-9
+            "ledger.history.correction.conflictsWithRepayment",
+            "This correction conflicts with a repayment on the same loan. Reverse the repayment first.",            // Ledger.History-11 (SRS 1.12)
             "dashboard.offline", "Offline — showing last known state",                                            // Dashboard.Net-5
             "admin.lastAdministrator", "The family must always have an active administrator"                         // Auth.Roles-12
     );
