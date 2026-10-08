@@ -14,6 +14,7 @@ import com.moundou.bank.ledger.AuditService;
 import com.moundou.bank.ledger.LedgerTransaction;
 import com.moundou.bank.ledger.TransactionKind;
 import com.moundou.bank.ledger.TransactionStatus;
+import com.moundou.bank.ledger.DualConfirmationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -69,6 +70,7 @@ class RolesAndProfileWebTests {
     @MockBean AuditService audit;
     @MockBean ProfileService profiles;
     @MockBean MemberAdministration administration;
+    @MockBean DualConfirmationService approvals;   // home shows the approval queue (MB-12)
 
     static SignedInMember signedIn(UUID id, String name, Role role) {
         OidcIdToken token = OidcIdToken.withTokenValue("t").subject("sub-" + id)
@@ -215,6 +217,7 @@ class RolesAndProfileWebTests {
     void homeShowsTheCurrentNameAndOnlyAdministratorsSeeTheAdministrationLink() throws Exception {
         when(administration.findById(MEMBER_ID)).thenReturn(Optional.of(summary(MEMBER_ID, "Ama the Renamed", Role.FAMILY_MEMBER, true)));
         when(administration.findById(ADMIN_ID)).thenReturn(Optional.of(summary(ADMIN_ID, "Boss", Role.FAMILY_ADMINISTRATOR, true)));
+        when(approvals.queue(any())).thenReturn(new DualConfirmationService.TransactionQueue(List.of(), List.of(), Map.of()));
 
         mvc.perform(get("/").with(oidcLogin().oidcUser(MEMBER)))
                 .andExpect(content().string(allOf(containsString("Signed in as Ama the Renamed"),
