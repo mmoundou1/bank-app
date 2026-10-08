@@ -27,10 +27,11 @@ public class DualConfirmationController {
     @GetMapping("/pending/{id}")
     public String getPending(@AuthenticationPrincipal SignedInMember me, @PathVariable UUID id, Model model) {
 
-       LedgerTransaction transaction = dualConfirmationService.view(me.memberId(), id).transaction();
-       Map<String, UUID> partiesMap = dualConfirmationService.view(me.memberId(), id).partiesMap();
+       DualConfirmationService.View details = dualConfirmationService.view(me.memberId(), id);
+       LedgerTransaction transaction = details.transaction();
+       Map<UUID, String> names = details.partiesMap();
 
-       return form(transaction, partiesMap, model);
+       return form(transaction, names, model);
     }
 
     @PostMapping("/pending/{id}/approve")
@@ -64,10 +65,10 @@ public class DualConfirmationController {
        };
     }
 
-    private String form(LedgerTransaction transaction, Map<String, UUID> partiesMap, Model model) {
+    private String form(LedgerTransaction transaction, Map<UUID, String> names, Model model) {
 
        model.addAttribute("item", transaction);
-       model.addAttribute("names", List.of(partiesMap.entrySet()));
+       model.addAttribute("names", names);
 
        return  "pending";
     }

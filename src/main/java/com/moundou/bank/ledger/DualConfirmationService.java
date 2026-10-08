@@ -20,10 +20,7 @@ public class DualConfirmationService {
         }
     }
 
-    public sealed interface TransactionObject {
-        record TransactionDetails(LedgerTransaction transaction, Map<String, UUID> partiesMap)
-                                                                implements DualConfirmationService.TransactionObject {}
-    }
+    public record View(LedgerTransaction transaction, Map<UUID, String> partiesMap) {}
 
     private final TransactionRepository transactions;
     private final MemberDirectory members;
@@ -73,27 +70,26 @@ public class DualConfirmationService {
             return new Outcome.Rejected("ledger.approval.notPending");
     }
 
-    public TransactionObject.TransactionDetails view(UUID counterpartyId, UUID actorId) {
+    public View view(UUID counterpartyId, UUID transactionId) {
         Member counterparty = members.findById(counterpartyId)
                                     .filter(Member::active)
                                     .orElseThrow(() -> new NotPermittedException(counterpartyId, "Member is inactive"));
         LedgerTransaction transaction = transactions
-                                .findById(counterparty.id())
+                                .findById(transactionId)
                                 .orElseThrow(() -> new NotPermittedException(counterpartyId, "Transaction not found"));
 
-        boolean isActor = actorId.equals(transaction.initiatedBy());
+        boolean isParty = counterparty.id().equals(transaction.creditor())
+                                                                    || counterparty.id().equals(transaction.debtor());
+        if (!isParty)
+            throw new NotPermittedException(counterparty.id(), "Action not permitted");
 
-        if (!isActor)
-            throw new NotPermittedException(counterpartyId, "Action not permitted");
+        Member creditor = members.findById(transaction.creditor()).orElseThrow();
+        Member debtor = members.findById(transaction.debtor()).orElseThrow();
+        Map<UUID, String> names = Map.of(
+                transaction.creditor(), creditor.displayName(),
+                transaction.debtor(), debtor.displayName());
 
-        Member actorMember = members.findById(actorId).get();
-        Member counterpartyMember = members.findById(counterparty.id()).get();
-        Map<String, UUID> partiesMap = new HashMap<>();
-
-        partiesMap.put(counterpartyMember.displayName(), counterparty.id());
-        partiesMap.put(actorMember.displayName(), actorId);
-
-        return new DualConfirmationService.TransactionObject.TransactionDetails(transaction, partiesMap);
+        return new DualConfirmationService.View(transaction, names);
 
     }
 }
