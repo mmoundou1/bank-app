@@ -8,8 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 public class DualConfirmationService {
@@ -19,6 +18,11 @@ public class DualConfirmationService {
         }
         record Rejected(String reason) implements DualConfirmationService.Outcome {
         }
+    }
+
+    public sealed interface TransactionObject {
+        record TransactionDetails(LedgerTransaction transaction, Map<String, UUID> partiesMap)
+                                                                implements DualConfirmationService.TransactionObject {}
     }
 
     private final TransactionRepository transactions;
@@ -64,9 +68,32 @@ public class DualConfirmationService {
             outbox.enqueue(transactionId, item.initiatedBy(), OutboxWriter.AlertKind.SETTLEMENT_ALERT);
 
             return new Outcome.Recorded(item);
-
         }
         else
             return new Outcome.Rejected("ledger.approval.notPending");
+    }
+
+    public TransactionObject.TransactionDetails view(UUID counterpartyId, UUID actorId) {
+        Member counterparty = members.findById(counterpartyId)
+                                    .filter(Member::active)
+                                    .orElseThrow(() -> new NotPermittedException(counterpartyId, "Member is inactive"));
+        LedgerTransaction transaction = transactions
+                                .findById(counterparty.id())
+                                .orElseThrow(() -> new NotPermittedException(counterpartyId, "Transaction not found"));
+
+        boolean isActor = actorId.equals(transaction.initiatedBy());
+
+        if (!isActor)
+            throw new NotPermittedException(counterpartyId, "Action not permitted");
+
+        Member actorMember = members.findById(actorId).get();
+        Member counterpartyMember = members.findById(counterparty.id()).get();
+        Map<String, UUID> partiesMap = new HashMap<>();
+
+        partiesMap.put(counterpartyMember.displayName(), counterparty.id());
+        partiesMap.put(actorMember.displayName(), actorId);
+
+        return new DualConfirmationService.TransactionObject.TransactionDetails(transaction, partiesMap);
+
     }
 }
