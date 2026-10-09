@@ -53,7 +53,9 @@
   <th:block th:if="${item.status().name() == 'PENDING'}">
     <!-- The counterparty decides: Ledger.Approval-3 -->
     <th:block th:unless="${mine}">
-      <form th:action="@{/pending/{id}/approve(id=${item.id()})}" method="post">
+      <!--/* Approve is built in MB-12's second pull request. Until then the button stays
+           hidden, so nobody is told "Approved" when nothing changed. Remove th:if then. */-->
+      <form th:if="${approveReady}" th:action="@{/pending/{id}/approve(id=${item.id()})}" method="post">
         <p class="hint" th:text="#{pending.approve.hint}">Your balances change as soon as you approve.</p>
         <button type="submit" th:text="#{pending.approve}">Approve</button>
       </form>

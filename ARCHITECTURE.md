@@ -138,7 +138,7 @@ All code is under `src/main/java/com/moundou/bank/`.
 | `AdminController` | `/admin`, `/admin/allow-list`, `/admin/allow-list/remove`, `/admin/members/{id}/deactivate`, `/admin/audit` | `admin.html`, `audit.html` |
 | `SecurityConfig` | Decides which routes are open, which need sign-in, and which need the administrator role | |
 
-| `DualConfirmationController` *(MB-12, being built)* | `GET /pending/{id}`, `POST /pending/{id}/approve`, `POST /pending/{id}/decline`, `POST /transactions/{id}/cancel` (TD §8) | `pending.html`; the queue is `queue.html`, shown on `home.html` |
+| `DualConfirmationController` *(MB-12: queue, view, decline and cancel done; approve to come, its button hidden until then)* | `GET /pending/{id}`, `POST /pending/{id}/approve`, `POST /pending/{id}/decline`, `POST /transactions/{id}/cancel` (TD §8) | `pending.html`; the queue is `queue.html`, shown on `home.html` |
 
 `layout.html` holds the shared `<head>`, styles and navigation, and a `flash`
 fragment that shows `messageKey`/`messageArgs` or `errorKey` after a redirect. Every page pulls

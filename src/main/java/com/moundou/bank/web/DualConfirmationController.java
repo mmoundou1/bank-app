@@ -65,8 +65,38 @@ public class DualConfirmationController {
        };
     }
 
-    private String form(LedgerTransaction transaction, Map<UUID, String> names, Model model) {
+    @PostMapping("/transactions/{id}/cancel")
+    public String cancel(@AuthenticationPrincipal SignedInMember me, @PathVariable UUID id, RedirectAttributes redirect) {
+       DualConfirmationService.Outcome outcome = dualConfirmationService.cancel(me.memberId(), id);
 
+        return switch (outcome) {
+            case DualConfirmationService.Outcome.Recorded recorded -> {
+                LedgerTransaction item = recorded.transaction();
+                String name;
+                Member member;
+
+                if(me.memberId().equals(item.creditor())) {
+                    member = members.findById(item.debtor()).orElseThrow();
+                }
+                else
+                    member = members.findById(item.creditor()).orElseThrow();
+
+                name = member.displayName();
+
+                redirect.addFlashAttribute("messageKey", "decision.cancelled");
+                redirect.addFlashAttribute("messageArgs", List.of(name));
+
+                yield "redirect:/";
+            }
+
+            case DualConfirmationService.Outcome.Rejected rejected -> {
+                redirect.addFlashAttribute("errorKey", rejected.reason());
+                yield "redirect:/pending/" + id;
+            }
+        };
+    }
+
+    private String form(LedgerTransaction transaction, Map<UUID, String> names, Model model) {
        model.addAttribute("item", transaction);
        model.addAttribute("names", names);
 

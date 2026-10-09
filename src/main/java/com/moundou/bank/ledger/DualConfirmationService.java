@@ -70,17 +70,17 @@ public class DualConfirmationService {
     }
 
     public View view(UUID actorId, UUID transactionId) {
-        Member counterparty = members.findById(actorId)
+        Member actor = members.findById(actorId)
                                     .filter(Member::active)
                                     .orElseThrow(() -> new NotPermittedException(actorId, "Member is inactive"));
         LedgerTransaction transaction = transactions
                                 .findById(transactionId)
                                 .orElseThrow(() -> new NotPermittedException(actorId, "Transaction not found"));
 
-        boolean isParty = counterparty.id().equals(transaction.creditor())
-                                                                    || counterparty.id().equals(transaction.debtor());
+        boolean isParty = actor.id().equals(transaction.creditor())
+                                                                    || actor.id().equals(transaction.debtor());
         if (!isParty)
-            throw new NotPermittedException(counterparty.id(), "Action not permitted");
+            throw new NotPermittedException(actor.id(), "Action not permitted");
 
         Member creditor = members.findById(transaction.creditor()).orElseThrow();
         Member debtor = members.findById(transaction.debtor()).orElseThrow();
@@ -121,4 +121,30 @@ public class DualConfirmationService {
 
         return new DualConfirmationService.TransactionQueue(toDecide, waiting, names);
     }
+
+    @Transactional
+    public Outcome cancel(UUID actorId, UUID transactionId) {
+        Member actor = members.findById(actorId)
+                .filter(Member::active)
+                .orElseThrow(() -> new NotPermittedException(actorId, "Member is inactive"));
+
+        LedgerTransaction item = transactions.lockForUpdate(transactionId)
+                .orElseThrow(() -> new NotPermittedException(actorId, "cancel " + transactionId));
+
+        if(!actor.id().equals(item.initiatedBy()))
+            throw new NotPermittedException(actorId, "Action not permitted");
+
+
+
+        if (item.status() == TransactionStatus.PENDING) {
+            transactions.recordHistory(transactionId, TransactionStatus.PENDING, TransactionStatus.CANCELLED, actor.id());
+            transactions.recordDecision(transactionId, TransactionStatus.CANCELLED, Instant.now(clock), null);
+
+            return new Outcome.Recorded(item);
+        }
+        else
+            return new Outcome.Rejected("ledger.approval.notPending");
+
+    }
+
 }
