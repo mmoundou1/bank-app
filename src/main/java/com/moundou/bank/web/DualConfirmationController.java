@@ -38,7 +38,7 @@ public class DualConfirmationController {
     public String transactionApproved(@AuthenticationPrincipal SignedInMember me,
                                       @PathVariable UUID id, RedirectAttributes redirect) {
 
-        return switch (dualConfirmationService.decline(me.memberId(), id, null)) {
+        return switch (dualConfirmationService.approve(me.memberId(), id)) {
             case DualConfirmationService.Outcome.Recorded recorded -> {
                 UUID initiatorId = recorded.transaction().initiatedBy();
                 Member member = members.findById(initiatorId)
