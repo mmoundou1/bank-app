@@ -39,7 +39,40 @@ public class DualConfirmationService {
 
     @Transactional
     public Outcome approve(UUID actorId, UUID transactionId) {
-        throw new UnsupportedOperationException("To be implemented");
+
+        Member actor = members.findById(actorId)
+                .filter(Member::active)
+                .orElseThrow(() -> new NotPermittedException(actorId, "Member is inactive"));
+
+        LedgerTransaction item = transactions.lockForUpdate(transactionId)
+                .orElseThrow(() -> new NotPermittedException(actorId, "approve transaction " + transactionId));
+
+        if (item.kind() != TransactionKind.LOAN)
+            throw new UnsupportedOperationException("Not a loan.");
+
+        TransactionStateMachine.Role role = TransactionStateMachine.roleOf(actor.id(), item);
+
+        TransactionStateMachine.Transition transition = TransactionStateMachine.next(item.status(),
+                TransactionStateMachine.Event.APPROVE, role);
+
+        switch (transition) {
+            case TransactionStateMachine.Transition.AllowedTo allowedTo -> {
+
+                transactions.recordHistory(transactionId, TransactionStatus.PENDING, allowedTo.to(), actorId);
+                transactions.recordDecision(transactionId, allowedTo.to(), Instant.now(clock), null);
+                outbox.enqueue(transactionId, item.initiatedBy(), OutboxWriter.AlertKind.SETTLEMENT_ALERT);
+
+                return new Outcome.Recorded(item);
+            }
+
+            case TransactionStateMachine.Transition.NotPending notPending -> {
+                return new Outcome.Rejected("ledger.approval.notPending");
+            }
+
+            case TransactionStateMachine.Transition.WrongActor wrongActor ->
+                    throw new NotPermittedException(actorId, "Action not permitted");
+
+        }
     }
 
     @Transactional
