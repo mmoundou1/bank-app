@@ -44,19 +44,29 @@ public class DualConfirmationService {
                 .filter(Member::active)
                 .orElseThrow(() -> new NotPermittedException(actorId, "Member is inactive"));
 
-        LedgerTransaction item = transactions.lockForUpdate(transactionId)
+        LedgerTransaction item = transactions.findById(transactionId).orElseThrow();
+        UUID loanId = item.settlesTransactionId();
+
+        LedgerTransaction loanItem = transactions.lockForUpdate(loanId)
+                        .orElseThrow(() -> new NotPermittedException(actorId, "settle a transaction " + transactionId));
+
+        transactions.lockForUpdate(transactionId)
                 .orElseThrow(() -> new NotPermittedException(actorId, "approve transaction " + transactionId));
 
-        if (item.kind() != TransactionKind.LOAN)
+
+        if (item.kind() != TransactionKind.COMPENSATING)
             throw new UnsupportedOperationException("Not a loan.");
 
-        TransactionStateMachine.Role role = TransactionStateMachine.roleOf(actor.id(), item);
+        TransactionStateMachine.Role role = TransactionStateMachine.roleOf(actor.id(), loanItem);
 
-        TransactionStateMachine.Transition transition = TransactionStateMachine.next(item.status(),
+        TransactionStateMachine.Transition transition = TransactionStateMachine.next(loanItem.status(),
                 TransactionStateMachine.Event.APPROVE, role);
 
         switch (transition) {
             case TransactionStateMachine.Transition.AllowedTo allowedTo -> {
+
+                if(transactions.loanLifecycle(loanId) != LoanLifecycle.OUTSTANDING)
+                    return new Outcome.Rejected("ledger.repayment.loan.notOutstanding");
 
                 transactions.recordHistory(transactionId, TransactionStatus.PENDING, allowedTo.to(), actorId);
                 transactions.recordDecision(transactionId, allowedTo.to(), Instant.now(clock), null);
