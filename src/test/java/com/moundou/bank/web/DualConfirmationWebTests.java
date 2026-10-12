@@ -30,7 +30,6 @@ import java.util.UUID;
 
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -94,7 +93,7 @@ class DualConfirmationWebTests {
                 .andExpect(content().string(allOf(
                         containsString("Ben says they lent you $20.00"),
                         containsString("/pending/" + TO_DECIDE.id() + "/decline"),
-                        not(containsString("/approve")))));   // hidden until approving is built (PR 2)
+                        containsString("/pending/" + TO_DECIDE.id() + "/approve"))));
     }
 
     @Test
@@ -102,6 +101,36 @@ class DualConfirmationWebTests {
         when(approvals.view(any(), any())).thenThrow(new NotPermittedException(AMA.memberId(), "view"));
 
         mvc.perform(get("/pending/" + UUID.randomUUID()).with(oidcLogin().oidcUser(AMA)))
+                .andExpect(status().isForbidden());
+    }
+
+    // ---- POST /pending/{id}/approve -----------------------------------------------
+
+    @Test
+    void anApprovalGoesHomeAndNamesTheInitiator() throws Exception {          // Ledger.Approval-4
+        when(approvals.approve(AMA.memberId(), TO_DECIDE.id())).thenReturn(new Outcome.Recorded(TO_DECIDE));
+
+        mvc.perform(post("/pending/" + TO_DECIDE.id() + "/approve").with(oidcLogin().oidcUser(AMA)).with(csrf()))
+                .andExpect(redirectedUrl("/"))
+                .andExpect(flash().attribute("messageKey", "decision.approved"))
+                .andExpect(flash().attribute("messageArgs", List.of("Ben")));
+    }
+
+    @Test
+    void anApprovalThatCameTooLateReturnsToTheItemWithOnlyTheError() throws Exception {   // T-Approval-9a
+        when(approvals.approve(any(), eq(TO_DECIDE.id()))).thenReturn(new Outcome.Rejected("ledger.approval.notPending"));
+
+        mvc.perform(post("/pending/" + TO_DECIDE.id() + "/approve").with(oidcLogin().oidcUser(AMA)).with(csrf()))
+                .andExpect(redirectedUrl("/pending/" + TO_DECIDE.id()))
+                .andExpect(flash().attribute("errorKey", "ledger.approval.notPending"))
+                .andExpect(flash().attributeCount(1));
+    }
+
+    @Test
+    void anApprovalByTheWrongMemberIsForbidden() throws Exception {           // T-Approval-3a
+        when(approvals.approve(any(), any())).thenThrow(new NotPermittedException(AMA.memberId(), "approve"));
+
+        mvc.perform(post("/pending/" + SENT.id() + "/approve").with(oidcLogin().oidcUser(AMA)).with(csrf()))
                 .andExpect(status().isForbidden());
     }
 
@@ -173,10 +202,13 @@ class DualConfirmationWebTests {
 
     @Test
     void everyDecisionNeedsACsrfToken() throws Exception {
+        mvc.perform(post("/pending/" + TO_DECIDE.id() + "/approve").with(oidcLogin().oidcUser(AMA)))
+                .andExpect(status().isForbidden());
         mvc.perform(post("/pending/" + TO_DECIDE.id() + "/decline").with(oidcLogin().oidcUser(AMA)))
                 .andExpect(status().isForbidden());
         mvc.perform(post("/transactions/" + SENT.id() + "/cancel").with(oidcLogin().oidcUser(AMA)))
                 .andExpect(status().isForbidden());
+        verify(approvals, never()).approve(any(), any());
         verify(approvals, never()).decline(any(), any(), any());
         verify(approvals, never()).cancel(any(), any());
     }
