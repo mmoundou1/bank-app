@@ -44,6 +44,7 @@ public class DualConfirmationService {
 
     @Transactional
     public Outcome decline(UUID actorId, UUID transactionId, String reason) {
+
         Member actor = members.findById(actorId)
                 .filter(Member::active)
                 .orElseThrow(() -> new NotPermittedException(actorId, "Member is inactive"));
@@ -51,22 +52,32 @@ public class DualConfirmationService {
         LedgerTransaction item = transactions.lockForUpdate(transactionId)
                     .orElseThrow(() -> new NotPermittedException(actorId, "decline transaction " + transactionId));
 
-        boolean isParty = actorId.equals(item.creditor()) || actorId.equals(item.debtor());
-        if (!isParty || actorId.equals(item.initiatedBy()))
-            throw new NotPermittedException(actorId, "Action not permitted");
+        TransactionStateMachine.Role role = TransactionStateMachine.roleOf(actor.id(), item);
 
-        if (item.status() == TransactionStatus.PENDING) {
-            if(reason == null || reason.isBlank())
-                reason = null;
+        TransactionStateMachine.Transition transition = TransactionStateMachine.next(item.status(),
+                                        TransactionStateMachine.Event.DECLINE, role);
 
-            transactions.recordHistory(transactionId, TransactionStatus.PENDING, TransactionStatus.DECLINED, actorId);
-            transactions.recordDecision(transactionId, TransactionStatus.DECLINED, Instant.now(clock), reason);
-            outbox.enqueue(transactionId, item.initiatedBy(), OutboxWriter.AlertKind.SETTLEMENT_ALERT);
+        switch (transition) {
+            case TransactionStateMachine.Transition.AllowedTo allowedTo -> {
+                if(reason == null || reason.isBlank())
+                    reason = null;
 
-            return new Outcome.Recorded(item);
+                transactions.recordHistory(transactionId, TransactionStatus.PENDING, allowedTo.to(), actorId);
+                transactions.recordDecision(transactionId, allowedTo.to(), Instant.now(clock), reason);
+                outbox.enqueue(transactionId, item.initiatedBy(), OutboxWriter.AlertKind.SETTLEMENT_ALERT);
+
+                return new Outcome.Recorded(item);
+            }
+
+            case TransactionStateMachine.Transition.NotPending notPending -> {
+                return new Outcome.Rejected("ledger.approval.notPending");
+            }
+
+            case TransactionStateMachine.Transition.WrongActor wrongActor ->
+                throw new NotPermittedException(actorId, "Action not permitted");
+
         }
-        else
-            return new Outcome.Rejected("ledger.approval.notPending");
+
     }
 
     public View view(UUID actorId, UUID transactionId) {
@@ -131,19 +142,29 @@ public class DualConfirmationService {
         LedgerTransaction item = transactions.lockForUpdate(transactionId)
                 .orElseThrow(() -> new NotPermittedException(actorId, "cancel " + transactionId));
 
-        if(!actor.id().equals(item.initiatedBy()))
-            throw new NotPermittedException(actorId, "Action not permitted");
+        TransactionStateMachine.Role role = TransactionStateMachine.roleOf(actor.id(), item);
 
+        TransactionStateMachine.Transition transition = TransactionStateMachine.next(item.status(),
+                TransactionStateMachine.Event.CANCEL, role);
 
+        switch (transition) {
 
-        if (item.status() == TransactionStatus.PENDING) {
-            transactions.recordHistory(transactionId, TransactionStatus.PENDING, TransactionStatus.CANCELLED, actor.id());
-            transactions.recordDecision(transactionId, TransactionStatus.CANCELLED, Instant.now(clock), null);
+            case TransactionStateMachine.Transition.AllowedTo allowedTo -> {
 
-            return new Outcome.Recorded(item);
+                transactions.recordHistory(transactionId, TransactionStatus.PENDING, allowedTo.to() , actorId);
+                transactions.recordDecision(transactionId, allowedTo.to(), Instant.now(clock), null);
+
+                return new Outcome.Recorded(item);
+            }
+
+            case TransactionStateMachine.Transition.NotPending notPending -> {
+                return new Outcome.Rejected("ledger.approval.notPending");
+            }
+
+            case TransactionStateMachine.Transition.WrongActor wrongActor ->
+                    throw new NotPermittedException(actorId, "Action not permitted");
+
         }
-        else
-            return new Outcome.Rejected("ledger.approval.notPending");
 
     }
 
