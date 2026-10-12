@@ -47,6 +47,9 @@ public class DualConfirmationService {
         LedgerTransaction item = transactions.lockForUpdate(transactionId)
                 .orElseThrow(() -> new NotPermittedException(actorId, "approve transaction " + transactionId));
 
+        if (item.kind() != TransactionKind.LOAN)
+            throw new UnsupportedOperationException("Not a loan.");
+
         TransactionStateMachine.Role role = TransactionStateMachine.roleOf(actor.id(), item);
 
         TransactionStateMachine.Transition transition = TransactionStateMachine.next(item.status(),

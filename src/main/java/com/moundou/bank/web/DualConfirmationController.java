@@ -38,8 +38,23 @@ public class DualConfirmationController {
     public String transactionApproved(@AuthenticationPrincipal SignedInMember me,
                                       @PathVariable UUID id, RedirectAttributes redirect) {
 
-       redirect.addFlashAttribute("messageKey", "decision.approved");
-       return "redirect:/";
+        return switch (dualConfirmationService.decline(me.memberId(), id, null)) {
+            case DualConfirmationService.Outcome.Recorded recorded -> {
+                UUID initiatorId = recorded.transaction().initiatedBy();
+                Member member = members.findById(initiatorId)
+                        .orElseThrow();
+
+                redirect.addFlashAttribute("messageKey", "decision.approved");
+                redirect.addFlashAttribute("messageArgs", List.of(member.displayName()));
+
+                yield "redirect:/";
+            }
+
+            case DualConfirmationService.Outcome.Rejected rejected -> {
+                redirect.addFlashAttribute("errorKey", rejected.reason());
+                yield "redirect:/pending/" + id;
+            }
+        };
 
     }
 
