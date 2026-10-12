@@ -89,6 +89,9 @@ public class DualConfirmationService {
 
         switch (transition) {
             case TransactionStateMachine.Transition.AllowedTo allowedTo -> {
+                if(reason == null || reason.isBlank())
+                    reason = null;
+
                 transactions.recordHistory(transactionId, TransactionStatus.PENDING, allowedTo.to(), actorId);
                 transactions.recordDecision(transactionId, allowedTo.to(), Instant.now(clock), reason);
                 outbox.enqueue(transactionId, item.initiatedBy(), OutboxWriter.AlertKind.SETTLEMENT_ALERT);
