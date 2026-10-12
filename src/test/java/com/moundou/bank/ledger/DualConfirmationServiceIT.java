@@ -1,6 +1,7 @@
 package com.moundou.bank.ledger;
 
 import com.moundou.bank.NotPermittedException;
+import com.moundou.bank.notification.OutboxWriter;
 import com.moundou.bank.ledger.DualConfirmationService.Outcome;
 import com.moundou.bank.support.LedgerFixtures;
 import com.moundou.bank.support.MutableClock;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -30,11 +32,15 @@ import java.util.concurrent.Future;
 import static com.moundou.bank.support.LedgerFixtures.USD;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.reset;
 
 /**
  * Slow suite. MB-12's first PR through the real Spring context: the queue on Home,
  * viewing one item, declining and cancelling, with their transaction, history rows and
- * alerts. Test IDs are from the Test Derivation page. Approving comes in later PRs.
+ * alerts. Test IDs are from the Test Derivation page. Approving covers loans only
+ * (MB-12 PR 2); repayments and corrections come with their locks in PRs 3 and 4.
  *
  * Ama sends, Ben decides, Cleo is a member who is party to nothing here.
  */
@@ -62,6 +68,8 @@ class DualConfirmationServiceIT {
 
     @Autowired DualConfirmationService service;
     @Autowired MutableClock clock;
+    /** The real outbox writer, which a test can make fail partway through (T-Approval-5a, ADR-009). */
+    @SpyBean OutboxWriter outbox;
 
     JdbcClient jdbc;
     LedgerFixtures ledger;
@@ -74,6 +82,7 @@ class DualConfirmationServiceIT {
     @BeforeEach
     void freshLedger() {
         clock.set(NOW);
+        reset(outbox);   // back to the real writer: a failure set up by one test must not leak into the next
         jdbc = JdbcClient.create(TestDatabase.dataSource());
         jdbc.sql("TRUNCATE notification, transaction_status_history, transaction, allowed_email, member").update();
         ledger = new LedgerFixtures(jdbc);
@@ -104,6 +113,12 @@ class DualConfirmationServiceIT {
     String declineReason(UUID transactionId) {
         return jdbc.sql("SELECT decline_reason FROM transaction WHERE transaction_id = :t")
                 .param("t", transactionId).query(String.class).single();
+    }
+
+    /** A member's net position in US dollars, from the balance view (Dashboard.Net-1). */
+    long net(UUID member) {
+        return jdbc.sql("SELECT coalesce(sum(net_minor), 0) FROM member_net WHERE member_id = :m AND currency = 'USD'")
+                .param("m", member).query(Long.class).single();
     }
 
     void deactivate(UUID member) {
@@ -291,6 +306,86 @@ class DualConfirmationServiceIT {
         }
     }
 
+    // ---- approving a loan ---------------------------------------------------------
+
+    @Nested
+    class Approve {
+
+        @Test
+        void theCounterpartyApprovesAndBothPositionsMoveByTheAmount() {         // T-Approval-4a
+            Outcome outcome = service.approve(ben, loan);
+
+            assertThat(outcome).isInstanceOf(Outcome.Recorded.class);
+            assertThat(ledger.status(loan)).isEqualTo(TransactionStatus.APPROVED);
+            assertThat(net(ama)).isEqualTo(2000);    // Ama lent $20.00: she is owed
+            assertThat(net(ben)).isEqualTo(-2000);   // Ben owes it
+            assertThat(history(loan)).containsExactly(List.of("pending", "approved", ben));
+            assertThat(service.queue(ben).toDecide()).isEmpty();
+            assertThat(service.queue(ama).waiting()).isEmpty();
+        }
+
+        @Test
+        void theInitiatorIsAlerted() {                                          // T-Approval-10a, T-NSettle-1a
+            service.approve(ben, loan);
+
+            assertThat(alerts(loan)).contains(List.of(ama, "settlement_alert"));
+        }
+
+        @Test
+        void theInitiatorCannotApproveTheirOwnItem() {                          // T-Approval-3a
+            assertThatThrownBy(() -> service.approve(ama, loan)).isInstanceOf(NotPermittedException.class);
+            assertThat(ledger.status(loan)).isEqualTo(TransactionStatus.PENDING);
+            assertThat(net(ama)).isZero();
+        }
+
+        @Test
+        void aMemberWhoIsNotAPartyCannotApprove() {                             // T-Approval-3b
+            assertThatThrownBy(() -> service.approve(cleo, loan)).isInstanceOf(NotPermittedException.class);
+            assertThat(ledger.status(loan)).isEqualTo(TransactionStatus.PENDING);
+        }
+
+        @Test
+        void aDeclinedItemCannotBeApproved() {                                  // T-Approval-9a
+            service.decline(ben, loan, null);
+
+            assertThat(service.approve(ben, loan)).isEqualTo(new Outcome.Rejected("ledger.approval.notPending"));
+            assertThat(ledger.status(loan)).isEqualTo(TransactionStatus.DECLINED);
+            assertThat(net(ben)).isZero();
+        }
+
+        @Test
+        void approvingTwiceTakesEffectOnce() {                                   // T-Approval-8a, one after the other
+            service.approve(ben, loan);
+
+            assertThat(service.approve(ben, loan)).isEqualTo(new Outcome.Rejected("ledger.approval.notPending"));
+            assertThat(net(ben)).isEqualTo(-2000);
+            assertThat(history(loan)).hasSize(1);
+            assertThat(alerts(loan)).filteredOn(a -> a.get(1).equals("settlement_alert")).hasSize(1);
+        }
+
+        @Test
+        void aFailurePartwayLeavesTheItemPendingWithNothingChanged() {          // T-Approval-5a, CON-7
+            doThrow(new IllegalStateException("outbox unavailable"))
+                    .when(outbox).enqueue(any(), any(), any());
+
+            assertThatThrownBy(() -> service.approve(ben, loan)).hasMessage("outbox unavailable");
+
+            assertThat(ledger.status(loan)).isEqualTo(TransactionStatus.PENDING);
+            assertThat(history(loan)).as("the history row written before the failure is rolled back").isEmpty();
+            assertThat(net(ama)).isZero();
+            assertThat(net(ben)).isZero();
+            assertThat(service.queue(ben).toDecide()).extracting(LedgerTransaction::id).containsExactly(loan);
+        }
+
+        @Test
+        void onlyLoansForNow() {                                                // repayments arrive with their lock in PR 3
+            UUID repayment = ledger.repayment(ledger.approvedLoan(ben, ama, 900, USD));   // Ama repays Ben; Ben decides
+
+            assertThatThrownBy(() -> service.approve(ben, repayment)).isInstanceOf(UnsupportedOperationException.class);
+            assertThat(ledger.status(repayment)).isEqualTo(TransactionStatus.PENDING);
+        }
+    }
+
     // ---- the race between the two parties -----------------------------------------
 
     /**
@@ -318,6 +413,34 @@ class DualConfirmationServiceIT {
                         .contains(new Outcome.Rejected("ledger.approval.notPending"));
                 assertThat(history(item)).as("round %d: one decision recorded", round).hasSize(1);
                 assertThat(ledger.status(item)).isIn(TransactionStatus.CANCELLED, TransactionStatus.DECLINED);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /**
+     * Ben taps Approve twice at the same moment, 50 times over (a double tap, or two
+     * devices). Exactly one approval takes effect each time, and the balance moves once
+     * (Ledger.Approval-8).
+     */
+    @Test
+    void twoApprovalsAtTheSameMomentTakeEffectOnce() throws Exception {         // T-Approval-8a
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            for (int round = 0; round < 50; round++) {
+                UUID item = ledger.loan(ama, ben, 100, USD);
+                CountDownLatch start = new CountDownLatch(1);
+                Callable<Outcome> tap = () -> { start.await(); return service.approve(ben, item); };
+                Future<Outcome> a = pool.submit(tap);
+                Future<Outcome> b = pool.submit(tap);
+                start.countDown();
+
+                List<Outcome> outcomes = List.of(a.get(), b.get());
+                assertThat(outcomes).as("round %d", round)
+                        .filteredOn(o -> o instanceof Outcome.Recorded).hasSize(1);
+                assertThat(history(item)).as("round %d", round).hasSize(1);
+                assertThat(net(ben)).as("round %d", round).isEqualTo(-100L * (round + 1));
             }
         } finally {
             pool.shutdownNow();
