@@ -45,17 +45,17 @@ public class DualConfirmationService {
                 .orElseThrow(() -> new NotPermittedException(actorId, "Member is inactive"));
 
         LedgerTransaction item = transactions.findById(transactionId)
-                            .orElseThrow(() -> new NotPermittedException(transactionId, "Transaction id is inactive"));
+                            .orElseThrow(() -> new NotPermittedException(actorId, "approve transaction " + transactionId));
 
         if (item.kind() == TransactionKind.COMPENSATING)
             throw new UnsupportedOperationException("Corrections are approved in PR 4.");
 
         UUID loanId = item.settlesTransactionId();
 
-        if(loanId != null) {
-            LedgerTransaction loanItem = transactions.lockForUpdate(loanId)
+        if(loanId != null)
+            transactions.lockForUpdate(loanId)
                     .orElseThrow(() -> new NotPermittedException(actorId, "settle a transaction " + transactionId));
-        }
+
 
         LedgerTransaction lockedItem = transactions.lockForUpdate(transactionId)
                 .orElseThrow(() -> new NotPermittedException(actorId, "approve transaction " + transactionId));
@@ -68,7 +68,7 @@ public class DualConfirmationService {
         switch (transition) {
             case TransactionStateMachine.Transition.AllowedTo allowedTo -> {
 
-                if(transactions.loanLifecycle(lockedItem.id()) != LoanLifecycle.OUTSTANDING)
+                if (loanId != null && transactions.loanLifecycle(loanId) != LoanLifecycle.OUTSTANDING)
                     return new Outcome.Rejected("ledger.repayment.loan.notOutstanding");
 
                 transactions.recordHistory(transactionId, TransactionStatus.PENDING, allowedTo.to(), actorId);
