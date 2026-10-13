@@ -13,7 +13,16 @@ import java.util.UUID;
  */
 public interface OutboxWriter {
 
-    enum AlertKind { PENDING_ALERT, SETTLEMENT_ALERT }
+    /**
+     * Stored lower-case in {@code notification.kind}; the check constraint lists the same
+     * values (V1, V3).
+     * <ul>
+     *   <li>{@code PENDING_ALERT}: to the counterparty, something waits for them (Notify.Pending-1).</li>
+     *   <li>{@code SETTLEMENT_ALERT}: to the initiator, their item was approved or declined (Notify.Settlement-1).</li>
+     *   <li>{@code CANCELLATION_ALERT}: to the counterparty, the initiator cancelled it (Notify.Settlement-4, CR-18).</li>
+     * </ul>
+     */
+    enum AlertKind { PENDING_ALERT, SETTLEMENT_ALERT, CANCELLATION_ALERT }
 
     void enqueue(UUID transactionId, UUID recipientId, AlertKind kind);
 }
