@@ -54,4 +54,22 @@ class FormatsTests {
         assertThat(formats.date(date, Locale.ENGLISH)).isEqualTo("Sep 28, 2026");
         assertThat(formats.date(date, Locale.FRENCH)).isEqualTo("28 sept. 2026");
     }
+
+    /** UI-6: a pre-filled amount is typed back exactly, in each currency and locale. */
+    @Test
+    void aPlainAmountReadsBackAsTheSameMinorUnits() {
+        assertThat(formats.plainAmount(123456, USD, Locale.ENGLISH)).isEqualTo("1234.56");
+        assertThat(formats.plainAmount(50000, XAF, Locale.ENGLISH)).isEqualTo("50000");
+        assertThat(formats.plainAmount(5, EUR, Locale.FRENCH)).isEqualTo("0,05");
+        for (Locale locale : new Locale[] {Locale.ENGLISH, Locale.FRENCH}) {
+            for (Currency currency : new Currency[] {USD, EUR, XAF}) {
+                for (long minor : new long[] {1, 99, 2000, 123456, 1_000_000_000L}) {
+                    String typed = formats.plainAmount(minor, currency, locale);
+                    assertThat(com.moundou.bank.ledger.Amounts.parse(typed, currency, locale))
+                            .as("%s %s in %s", typed, currency, locale)
+                            .isEqualTo(new com.moundou.bank.ledger.Amounts.Parsed.Ok(minor));
+                }
+            }
+        }
+    }
 }

@@ -326,6 +326,41 @@ public class TransactionRepository {
                 .query(TransactionRepository::mapRow).list();
     }
 
+    // ---- MB-13: recording a repayment ---------------------------------------------------
+
+    /**
+     * The loans {@code borrowerId} can choose to repay (Ledger.Repayment-8): approved
+     * loans on which they are the debtor that are Outstanding, and that have no repayment
+     * already waiting for a decision. Oldest first.
+     *
+     * Outstanding means the same as {@link #loanLifecycle}: not reversed by an approved
+     * correction, and not settled by an approved repayment that has no approved
+     * correction of its own. A loan whose repayment was reversed is offered again
+     * (T-Repay-10a). Hiding a loan with a pending repayment is what stops the same loan
+     * being repaid twice from the form; a true race is caught by the loan lock when the
+     * lender approves (CR-14 Q3, T-Repay-8b).
+     *
+     * Filtered by the borrower here, not by the caller (SEC-2).
+     */
+    public List<LedgerTransaction> outstandingLoansOwedBy(UUID borrowerId) {
+        return jdbc.sql("SELECT " + COLUMNS + " FROM transaction l"
+                        + " WHERE l.kind = 'loan' AND l.status = 'approved' AND l.debtor_id = :me"
+                        + "   AND NOT EXISTS (SELECT 1 FROM transaction c"
+                        + "                    WHERE c.corrects_transaction_id = l.transaction_id"
+                        + "                      AND c.status = 'approved')"
+                        + "   AND NOT EXISTS (SELECT 1 FROM transaction r"
+                        + "                    WHERE r.settles_transaction_id = l.transaction_id"
+                        + "                      AND r.kind = 'repayment'"
+                        + "                      AND (r.status = 'pending'"
+                        + "                           OR (r.status = 'approved'"
+                        + "                               AND NOT EXISTS (SELECT 1 FROM transaction rc"
+                        + "                                                WHERE rc.corrects_transaction_id = r.transaction_id"
+                        + "                                                  AND rc.status = 'approved'))))"
+                        + " ORDER BY l.transaction_date, l.created_at, l.transaction_id")
+                .param("me", borrowerId)
+                .query(TransactionRepository::mapRow).list();
+    }
+
     // ---- MB-12: approving a correction ----------------------------------------------------
 
     /**

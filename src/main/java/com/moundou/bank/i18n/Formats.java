@@ -38,6 +38,24 @@ public class Formats {
         return format.format(BigDecimal.valueOf(minorUnits).movePointLeft(digits));
     }
 
+    /**
+     * An amount as a person would type it, with no currency symbol or grouping, so it
+     * can pre-fill an input and be read back by Amounts.parse in the same locale: 20.00,
+     * or 50000 for XAF. Used where a form is pre-filled from a stored amount (UI-6).
+     */
+    public String plainAmount(long minorUnits, Currency currency) {
+        return plainAmount(minorUnits, currency, LocaleContextHolder.getLocale());
+    }
+
+    public String plainAmount(long minorUnits, Currency currency, Locale locale) {
+        NumberFormat format = NumberFormat.getNumberInstance(locale);
+        format.setGroupingUsed(false);
+        int digits = currency.getDefaultFractionDigits();
+        format.setMinimumFractionDigits(digits);
+        format.setMaximumFractionDigits(digits);
+        return format.format(BigDecimal.valueOf(minorUnits).movePointLeft(digits));
+    }
+
     /** A calendar date, never shifted by any zone (ADR-012). */
     public String date(LocalDate date) {
         return date(date, LocaleContextHolder.getLocale());

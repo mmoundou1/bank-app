@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.language}">
+<head th:replace="~{layout :: head('repayment.title')}"><title>Record a repayment</title></head>
+<body>
+<nav th:replace="~{layout :: nav}"></nav>
+<!--/* Recording a repayment (MB-13, UC-04, SRS 3.2). Two steps on one template, no
+  JavaScript needed:
+
+  1. GET /repayments/new            the loans you can repay (Ledger.Repayment-8), each
+                                    with a link to step 2. One loan per repayment
+                                    (Ledger.Repayment-6), so there is no multi-select.
+  2. GET /repayments/new?loan={id}  the form for that loan, the amount pre-filled from
+                                    it (UI-6). POSTs to /repayments.
+
+  Model, step 1:
+    loans          List<LedgerTransaction>  TransactionRepository.outstandingLoansOwedBy(me)
+    names          Map<UUID, String>        display name of every lender in loans
+  Flash, after a successful POST: messageKey + messageArgs (layout :: flash), e.g.
+    repayment.sent with {0} the lender's name and {1} the amount.
+
+  Model, step 2 (loan present):
+    loan           LedgerTransaction        the loan being repaid
+    names          Map<UUID, String>        must contain the lender
+    submissionKey  UUID                     sent back unchanged (Ledger.Entry-14 applies too)
+    currencies     List<String>             as on the entry form
+  Only after a rejected POST:
+    repayment      the request as typed (fields below), so nothing is lost (UI-4)
+    errors         Map: "loan" | "amount" | "currency" -> message key, e.g.
+                   "loan" -> ledger.repayment.loan.notOutstanding (Ledger.Repayment-10)
+                   "amount" -> ledger.repayment.amount.mismatch (-7) or an Amounts key
+                   "currency" -> ledger.repayment.currency.mismatch (-9)
+
+  The POST sends four fields, named to match a request record's components:
+    loanId, amountText, currencyCode, submissionKey.
+  The service checks everything again: a hand-made POST may name any loan, amount or
+  currency (T-Repay-10b).
+*/-->
+<main>
+  <h1 th:text="#{repayment.title}">Record a repayment</h1>
+  <div th:replace="~{layout :: flash}"></div>
+
+  <!-- Step 1: choose the loan -->
+  <th:block th:if="${loan == null}">
+    <p th:text="#{repayment.intro}">Choose the loan you paid back. The lender confirms it before your balances change.</p>
+    <p th:if="${loans.isEmpty()}" class="muted" th:text="#{repayment.none}">You have no outstanding loans to repay.</p>
+    <ul class="rows">
+      <li th:each="l : ${loans}">
+        <span>
+          <strong th:text="#{repayment.loan.owed(${names.get(l.creditor())}, ${@formats.amount(l.amountMinor(), l.currency())})}">You owe Ama $20.00</strong>
+          <span th:if="${l.openingBalance()}" class="hint" th:text="#{audit.openingBalance}">(opening balance)</span><br>
+          <span class="hint" th:text="#{repayment.loan.date(${@formats.date(l.transactionDate())})}">Borrowed on Sep 28, 2026</span>
+          <span th:if="${l.note() != null}" class="hint" aria-hidden="true">·</span>
+          <span th:if="${l.note() != null}" class="hint" th:text="${l.note()}">note</span>
+        </span>
+        <a th:href="@{/repayments/new(loan=${l.id()})}" th:text="#{repayment.choose}">Repay this loan</a>
+      </li>
+    </ul>
+  </th:block>
+
+  <!-- Step 2: confirm the amount for one loan -->
+  <th:block th:if="${loan != null}"
+            th:with="lender=${names.get(loan.creditor())},
+                     owed=${@formats.amount(loan.amountMinor(), loan.currency())}">
+    <p><strong th:text="#{repayment.form.heading(${lender}, ${owed}, ${@formats.date(loan.transactionDate())})}">You are repaying the $20.00 you borrowed from Ama on Sep 28, 2026</strong></p>
+    <p th:if="${errors?.containsKey('loan')}" class="error" role="alert" th:text="#{${errors['loan']}}">This loan is no longer outstanding</p>
+
+    <form th:action="@{/repayments}" method="post" novalidate>
+      <input type="hidden" name="submissionKey" th:value="${submissionKey}">
+      <input type="hidden" name="loanId" th:value="${loan.id()}">
+
+      <!-- Pre-filled with the loan's amount (UI-6); a repayment settles it in full (Ledger.Repayment-5, -7) -->
+      <label for="amountText" th:text="#{repayment.amount.label}">Amount you repaid</label>
+      <input id="amountText" name="amountText" type="text" inputmode="decimal" autocomplete="off"
+             th:value="${repayment?.amountText() ?: @formats.plainAmount(loan.amountMinor(), loan.currency())}">
+      <p class="hint" th:text="#{repayment.amount.hint}">A repayment settles the whole loan, so it is the full amount.</p>
+      <p th:if="${errors?.containsKey('amount')}" class="error" th:text="#{${errors['amount']}}">Error</p>
+
+      <!-- The loan's currency is chosen; another is refused (Ledger.Repayment-9) -->
+      <label for="currencyCode" th:text="#{repayment.currency.label}">Currency</label>
+      <select id="currencyCode" name="currencyCode">
+        <option th:each="c : ${currencies}" th:value="${c}" th:text="#{${'entry.currency.' + c}}"
+                th:selected="${(repayment != null ? repayment.currencyCode() : '' + loan.currency()) == c}">US dollars</option>
+      </select>
+      <p th:if="${errors?.containsKey('currency')}" class="error" th:text="#{${errors['currency']}}">Error</p>
+
+      <p class="hint" th:text="#{repayment.submit.hint(${lender})}">Ama confirms it before your balances change.</p>
+      <p><button type="submit" th:text="#{repayment.submit}">Send for approval</button></p>
+    </form>
+    <p><a th:href="@{/repayments/new}" th:text="#{repayment.another}">Choose a different loan</a></p>
+  </th:block>
+</main>
+</body>
+</html>
