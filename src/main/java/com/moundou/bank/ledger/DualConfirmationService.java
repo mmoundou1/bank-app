@@ -210,8 +210,16 @@ public class DualConfirmationService {
 
             case TransactionStateMachine.Transition.AllowedTo allowedTo -> {
 
+                UUID counterpartyId = null;
+
+                if(item.creditor().equals(actor.id()))
+                    counterpartyId = item.debtor();
+                else
+                    counterpartyId = item.creditor();
+
                 transactions.recordHistory(transactionId, TransactionStatus.PENDING, allowedTo.to() , actorId);
                 transactions.recordDecision(transactionId, allowedTo.to(), Instant.now(clock), null);
+                outbox.enqueue(transactionId, counterpartyId, OutboxWriter.AlertKind.CANCELLATION_ALERT);
 
                 return new Outcome.Recorded(item);
             }

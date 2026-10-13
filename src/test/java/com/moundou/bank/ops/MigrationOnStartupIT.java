@@ -39,6 +39,6 @@ class MigrationOnStartupIT {
         List<String> applied = JdbcClient.create(dataSource)
                 .sql("SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank")
                 .query(String.class).list();
-        assertThat(applied).containsExactly("1", "2");
+        assertThat(applied).containsExactly("1", "2", "3");
     }
 }

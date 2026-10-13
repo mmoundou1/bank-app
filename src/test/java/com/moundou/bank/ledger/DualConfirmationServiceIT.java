@@ -269,10 +269,22 @@ class DualConfirmationServiceIT {
         }
 
         @Test
-        void noAlertIsSentForACancellation() {                                  // SRS 1.12; CR-18 (MB-40) proposes one
+        void theCounterpartyAndOnlyTheCounterpartyIsAlerted() {                 // T-NSettle-4a, Notify.Settlement-4 (CR-18)
             service.cancel(ama, loan);
 
-            assertThat(alerts(loan)).noneMatch(a -> a.get(1).equals("settlement_alert"));
+            assertThat(alerts(loan)).containsExactly(List.of(ben, "cancellation_alert"));
+            assertThat(net(ama)).isZero();
+            assertThat(net(ben)).isZero();
+        }
+
+        @Test
+        void aRefusedCancelSendsNoAlert() {
+            service.decline(ben, loan, null);
+            int before = alerts(loan).size();
+
+            service.cancel(ama, loan);
+
+            assertThat(alerts(loan)).hasSize(before).noneMatch(a -> a.get(1).equals("cancellation_alert"));
         }
 
         @Test
