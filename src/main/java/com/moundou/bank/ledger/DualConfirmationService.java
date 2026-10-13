@@ -47,14 +47,18 @@ public class DualConfirmationService {
         LedgerTransaction item = transactions.findById(transactionId)
                             .orElseThrow(() -> new NotPermittedException(actorId, "approve transaction " + transactionId));
 
-        if (item.kind() == TransactionKind.COMPENSATING)
-            throw new UnsupportedOperationException("Corrections are approved in PR 4.");
-
+        UUID correctsTransactionId = item.correctsTransactionId();
         UUID loanId = item.settlesTransactionId();
+        LedgerTransaction target = null;
+
+        if(correctsTransactionId != null) {
+            target = transactions.lockForUpdate(correctsTransactionId)
+                        .orElseThrow(() -> new NotPermittedException(actorId, "correct a transaction " + transactionId));
+        }
 
         if(loanId != null)
             transactions.lockForUpdate(loanId)
-                    .orElseThrow(() -> new NotPermittedException(actorId, "settle a transaction " + transactionId));
+                        .orElseThrow(() -> new NotPermittedException(actorId, "settle a transaction " + transactionId));
 
 
         LedgerTransaction lockedItem = transactions.lockForUpdate(transactionId)
@@ -70,6 +74,15 @@ public class DualConfirmationService {
 
                 if (loanId != null && transactions.loanLifecycle(loanId) != LoanLifecycle.OUTSTANDING)
                     return new Outcome.Rejected("ledger.repayment.loan.notOutstanding");
+
+                if(correctsTransactionId != null) {
+                    if (transactions.hasApprovedCorrection(correctsTransactionId))
+                        return new Outcome.Rejected("ledger.history.correction.alreadyCorrected");
+
+                    if (target.kind() == TransactionKind.LOAN
+                            && transactions.loanLifecycle(target.id()) == LoanLifecycle.SETTLED)
+                        return new Outcome.Rejected("ledger.history.correction.conflictsWithRepayment");
+                }
 
                 transactions.recordHistory(transactionId, TransactionStatus.PENDING, allowedTo.to(), actorId);
                 transactions.recordDecision(transactionId, allowedTo.to(), Instant.now(clock), null);

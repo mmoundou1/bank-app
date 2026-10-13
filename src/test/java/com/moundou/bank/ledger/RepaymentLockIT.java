@@ -214,26 +214,28 @@ class RepaymentLockIT {
         assertThat(approveRepayment(repayment)).isEqualTo(Outcome.NOT_PENDING);
     }
 
-    /** Technical Design 5, transitions L1 to L5, including chains of corrections. */
+    /** Technical Design 5, transitions L1 to L4. Reversed is final (SRS 1.13, CR-17). */
     @Test
-    void loanLifecycleFollowsTheCorrectionChain() {
+    void loanLifecycleFollowsItsTransitions() {
         UUID pending = ledger.loan(lender, borrower, 900, USD);
         assertThat(repository.loanLifecycle(pending)).isEqualTo(LoanLifecycle.NOT_AN_APPROVED_LOAN);
 
         UUID loan = ledger.approve(pending);                                          // L1
         assertThat(repository.loanLifecycle(loan)).isEqualTo(LoanLifecycle.OUTSTANDING);
 
-        UUID c1 = ledger.approve(ledger.correction(loan));                            // L3
-        assertThat(repository.loanLifecycle(loan)).isEqualTo(LoanLifecycle.REVERSED);
+        UUID repayment = ledger.approve(ledger.repayment(loan));                      // L2
+        assertThat(repository.loanLifecycle(loan)).isEqualTo(LoanLifecycle.SETTLED);
 
-        UUID c2 = ledger.approve(ledger.correction(c1));                              // L5
+        UUID reversal = ledger.approve(ledger.correction(repayment));                 // L4
         assertThat(repository.loanLifecycle(loan)).isEqualTo(LoanLifecycle.OUTSTANDING);
 
-        ledger.approve(ledger.correction(c2));                                        // reversed again
+        ledger.approve(ledger.correction(loan));                                      // L3
         assertThat(repository.loanLifecycle(loan)).isEqualTo(LoanLifecycle.REVERSED);
 
-        assertThat(repository.loanLifecycle(c1))
+        assertThat(repository.loanLifecycle(reversal))
                 .as("a compensating entry is not a loan").isEqualTo(LoanLifecycle.NOT_AN_APPROVED_LOAN);
+        assertThat(repository.loanLifecycle(repayment))
+                .as("nor is a repayment").isEqualTo(LoanLifecycle.NOT_AN_APPROVED_LOAN);
     }
 
     @Test

@@ -15,7 +15,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Plain-SQL access to the {@code transaction} table (ADR-015). Every statement is
@@ -216,10 +215,9 @@ public class TransactionRepository {
      * ends. Must be called inside a transaction; with autocommit the lock is released
      * as soon as the statement returns and protects nothing.
      *
-     * Lock order: the referenced row (loan, or correction target) before the item
-     * being decided. See the class comment. Approving a correction locks one more row
-     * before both: the loan its chain concerns ({@link #chainLoanOf}), which is the
-     * oldest row of all, so the order still holds (Technical Design 4, CR-15).
+     * Lock order: the referenced row (the loan a repayment settles, or the loan or
+     * repayment a correction reverses) before the item being decided. See the class
+     * comment and Technical Design 4.
      */
     public Optional<LedgerTransaction> lockForUpdate(UUID id) {
         return jdbc.sql("SELECT " + COLUMNS + " FROM transaction WHERE transaction_id = :id FOR UPDATE")
@@ -256,25 +254,20 @@ public class TransactionRepository {
      * Where an approved loan stands: Outstanding, Settled or Reversed (Technical Design 5,
      * SRS glossary). Computed from the ledger on every call, never stored.
      *
-     * <h3>Reversal is a chain, so this counts it</h3>
-     * A row is reversed by an approved compensating entry, which can itself be reversed
-     * (L5 in the loan lifecycle), and so on. INT-6 allows at most one approved correction
-     * per row, so the approved corrections of any row form a single chain. A row is
-     * <em>in effect</em> when that chain has even length: zero (never corrected), two
-     * (corrected, then the correction corrected), and so on.
-     *
-     * The recursive query below starts from the loan and from every approved repayment
-     * of it, and walks each chain of approved corrections, recording how deep it goes.
-     * Then:
+     * A compensating entry reverses a loan or a repayment, never another compensating
+     * entry (Ledger.History-9, SRS 1.13), so each state is one plain question:
      * <ul>
-     *   <li>the loan is Reversed if its own chain is odd;</li>
-     *   <li>otherwise Settled if any approved repayment's chain is even (the repayment
-     *       stands);</li>
-     *   <li>otherwise Outstanding. That includes a loan whose only repayment was
+     *   <li>Reversed: the loan has an approved compensating entry. This is final.</li>
+     *   <li>Settled: otherwise, the loan has an approved repayment that has no approved
+     *       compensating entry of its own.</li>
+     *   <li>Outstanding: neither. That includes a loan whose only repayment was
      *       reversed, which can be repaid again (T-Repay-10a, CR-14 Q1).</li>
      * </ul>
-     * Pending repayments do not count here. Hiding a loan with a pending repayment from
-     * the repayment form (Ledger.Repayment-8) is a separate query in MB-13.
+     * Pending repayments and corrections do not count here. Hiding a loan with a pending
+     * repayment from the repayment form (Ledger.Repayment-8) is a separate query in MB-13.
+     *
+     * Read it while holding the lock on the loan when the answer decides an approval
+     * (Technical Design 4); otherwise a decision committed a moment later is not seen.
      */
     public LoanLifecycle loanLifecycle(UUID loanId) {
         Optional<LedgerTransaction> loan = findById(loanId);
@@ -283,12 +276,23 @@ public class TransactionRepository {
                 || loan.get().status() != TransactionStatus.APPROVED) {
             return LoanLifecycle.NOT_AN_APPROVED_LOAN;
         }
-
-        LoanStanding standing = standing(loanId, null);
-        if (standing.reversed()) {
+        if (hasApprovedCorrection(loanId)) {
             return LoanLifecycle.REVERSED;
         }
-        return standing.unreversedRepayments() > 0 ? LoanLifecycle.SETTLED : LoanLifecycle.OUTSTANDING;
+        boolean settled = jdbc.sql("""
+                SELECT EXISTS (
+                    SELECT 1 FROM transaction r
+                     WHERE r.settles_transaction_id = :loan
+                       AND r.kind = 'repayment'
+                       AND r.status = 'approved'
+                       AND NOT EXISTS (
+                           SELECT 1 FROM transaction c
+                            WHERE c.corrects_transaction_id = r.transaction_id
+                              AND c.status = 'approved'))""")
+                .param("loan", loanId)
+                .query(Boolean.class)
+                .single();
+        return settled ? LoanLifecycle.SETTLED : LoanLifecycle.OUTSTANDING;
     }
 
     // ---- MB-12: the approval queue ------------------------------------------------------
@@ -322,7 +326,7 @@ public class TransactionRepository {
                 .query(TransactionRepository::mapRow).list();
     }
 
-    // ---- MB-12: approving a correction (SRS 1.12, CR-15) ---------------------------------
+    // ---- MB-12: approving a correction ----------------------------------------------------
 
     /**
      * Whether {@code targetId} already has an approved compensating entry (INT-6). Read
@@ -341,97 +345,6 @@ public class TransactionRepository {
                 .param("target", targetId)
                 .query(Boolean.class)
                 .single();
-    }
-
-    /**
-     * The loan a compensating entry's correction chain concerns (SRS glossary,
-     * Technical Design 5). Follows {@code corrects_transaction_id} back to the first row
-     * of the chain; that row is either the loan itself, or a repayment, whose loan is
-     * the one it settles.
-     *
-     * Empty when {@code correctionId} does not exist or is not a compensating entry. The
-     * references are fixed when a row is inserted, so the answer never changes and can
-     * be read before taking any lock: the approval service locks the loan it returns
-     * first (Technical Design 4).
-     */
-    public Optional<UUID> chainLoanOf(UUID correctionId) {
-        return jdbc.sql("""
-                WITH RECURSIVE up (transaction_id, kind, settles_transaction_id,
-                                   corrects_transaction_id, steps) AS (
-                    SELECT transaction_id, kind, settles_transaction_id, corrects_transaction_id, 0
-                      FROM transaction
-                     WHERE transaction_id = :correction AND kind = 'compensating'
-                  UNION ALL
-                    SELECT t.transaction_id, t.kind, t.settles_transaction_id, t.corrects_transaction_id, up.steps + 1
-                      FROM up
-                      JOIN transaction t ON t.transaction_id = up.corrects_transaction_id
-                )
-                SELECT CASE kind WHEN 'loan' THEN transaction_id
-                                 WHEN 'repayment' THEN settles_transaction_id END AS loan_id
-                  FROM up
-                 WHERE corrects_transaction_id IS NULL
-                """)
-                .param("correction", correctionId)
-                .query((rs, n) -> rs.getObject("loan_id", UUID.class))
-                .optional();
-    }
-
-    /**
-     * Where {@code loanId} would stand if the pending compensating entry
-     * {@code correctionId} were approved, without approving it: the check behind
-     * Ledger.History-11 and INT-5 (SRS 1.12, CR-15). The entry is simply counted as
-     * approved in the chain walk.
-     *
-     * To be read while holding the lock on the loan (Technical Design 4); otherwise a
-     * repayment approved a moment later would not be seen. When raising a correction
-     * (MB-14) it is read without the lock, as a courtesy check that approval repeats.
-     */
-    public LoanStanding loanStandingIfApproved(UUID loanId, UUID correctionId) {
-        return standing(loanId, correctionId);
-    }
-
-    /**
-     * Walks every correction chain hanging off a loan: the loan's own, and one from each
-     * approved repayment of it. A row is in effect when its chain of approved corrections
-     * has even length (INT-6 allows at most one approved correction per row, so each
-     * chain is a single line). See {@link #loanLifecycle}.
-     *
-     * @param assumeApproved a pending compensating entry to count as approved, or null
-     */
-    private LoanStanding standing(UUID loanId, UUID assumeApproved) {
-        record ChainDepth(boolean isLoan, int depth) { }
-
-        List<ChainDepth> chains = jdbc.sql("""
-                WITH RECURSIVE chain (root_id, node_id, depth) AS (
-                    SELECT t.transaction_id, t.transaction_id, 0
-                      FROM transaction t
-                     WHERE t.transaction_id = :loan
-                        OR (t.settles_transaction_id = :loan
-                            AND t.kind = 'repayment'
-                            AND t.status = 'approved')
-                  UNION ALL
-                    SELECT c.root_id, t.transaction_id, c.depth + 1
-                      FROM chain c
-                      JOIN transaction t
-                        ON t.corrects_transaction_id = c.node_id
-                       AND (t.status = 'approved' OR t.transaction_id = :assume)
-                )
-                SELECT root_id, MAX(depth) AS depth
-                  FROM chain
-                 GROUP BY root_id
-                """)
-                .param("loan", loanId)
-                .param("assume", assumeApproved, java.sql.Types.OTHER)
-                .query((rs, n) -> new ChainDepth(
-                        rs.getObject("root_id", UUID.class).equals(loanId), rs.getInt("depth")))
-                .list();
-
-        Map<Boolean, List<ChainDepth>> byRole =
-                chains.stream().collect(Collectors.partitioningBy(ChainDepth::isLoan));
-
-        boolean reversed = byRole.get(true).stream().anyMatch(c -> c.depth() % 2 == 1);
-        int standing = (int) byRole.get(false).stream().filter(c -> c.depth() % 2 == 0).count();
-        return new LoanStanding(reversed, standing);
     }
 
     private static LedgerTransaction mapRow(ResultSet rs, int rowNum) throws SQLException {

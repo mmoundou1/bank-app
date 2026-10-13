@@ -39,8 +39,8 @@ import static org.mockito.Mockito.reset;
 /**
  * Slow suite. MB-12's first PR through the real Spring context: the queue on Home,
  * viewing one item, declining and cancelling, with their transaction, history rows and
- * alerts. Test IDs are from the Test Derivation page. Approving covers loans (MB-12
- * PR 2) and repayments (PR 3); corrections come with their lock in PR 4.
+ * alerts. Test IDs are from the Test Derivation page. Approving covers loans,
+ * repayments and corrections (MB-12 PRs 2 to 4).
  *
  * Ama sends, Ben decides, Cleo is a member who is party to nothing here.
  */
@@ -376,14 +376,6 @@ class DualConfirmationServiceIT {
             assertThat(net(ben)).isZero();
             assertThat(service.queue(ben).toDecide()).extracting(LedgerTransaction::id).containsExactly(loan);
         }
-
-        @Test
-        void correctionsWaitForTheirOwnPullRequest() {                          // MB-12 PR 4
-            UUID correction = ledger.correction(ledger.approvedLoan(ama, ben, 900, USD));   // Ben raises it; Ama decides
-
-            assertThatThrownBy(() -> service.approve(ama, correction)).isInstanceOf(UnsupportedOperationException.class);
-            assertThat(ledger.status(correction)).isEqualTo(TransactionStatus.PENDING);
-        }
     }
 
     // ---- approving a repayment ----------------------------------------------------
@@ -450,6 +442,86 @@ class DualConfirmationServiceIT {
             service.approve(ama, again);
 
             assertThat(service.cancel(ben, again)).isInstanceOf(Outcome.Recorded.class);
+        }
+    }
+
+    // ---- approving a correction ---------------------------------------------------
+
+    /**
+     * Ama lent Ben $9.00 and it was approved. A compensating entry swaps the parties of
+     * the row it reverses (SRS 4.2), and the fixture records it as raised by that row's
+     * debtor, so on a correction of the loan Ben is the initiator and Ama decides.
+     */
+    @Nested
+    class ApproveCorrection {
+
+        UUID lent;
+
+        @BeforeEach
+        void amaLentBen() {
+            lent = ledger.approvedLoan(ama, ben, 900, USD);
+        }
+
+        @Test
+        void correctingAnOutstandingLoanReversesIt() {                         // T-Hist-10b, L3
+            UUID correction = ledger.correction(lent);
+
+            assertThat(service.approve(ama, correction)).isInstanceOf(Outcome.Recorded.class);
+
+            assertThat(ledger.repository().loanLifecycle(lent)).isEqualTo(LoanLifecycle.REVERSED);
+            assertThat(net(ama)).isZero();
+            assertThat(net(ben)).isZero();
+            assertThat(alerts(correction)).contains(List.of(ben, "settlement_alert"));
+        }
+
+        @Test
+        void aRepaidLoanCannotBeCorrectedUntilItsRepaymentIs() {               // T-Hist-11a, T-Hist-11b
+            UUID repaid = ledger.approve(ledger.repayment(lent));
+            UUID correction = ledger.correction(lent);
+
+            assertThat(service.approve(ama, correction))
+                    .isEqualTo(new Outcome.Rejected("ledger.history.correction.conflictsWithRepayment"));
+            assertThat(ledger.status(correction)).isEqualTo(TransactionStatus.PENDING);
+            assertThat(history(correction)).isEmpty();
+
+            UUID undoRepayment = ledger.correction(repaid);                    // Ama raises it; Ben decides
+            assertThat(service.approve(ben, undoRepayment)).isInstanceOf(Outcome.Recorded.class);
+            assertThat(ledger.repository().loanLifecycle(lent)).isEqualTo(LoanLifecycle.OUTSTANDING);
+
+            assertThat(service.approve(ama, correction)).isInstanceOf(Outcome.Recorded.class);
+            assertThat(ledger.repository().loanLifecycle(lent)).isEqualTo(LoanLifecycle.REVERSED);
+            assertThat(net(ama)).isZero();
+        }
+
+        @Test
+        void correctingARepaymentPutsTheDebtBack() {                           // L4, T-Repay-10a
+            UUID repaid = ledger.approve(ledger.repayment(lent));
+            UUID correction = ledger.correction(repaid);                       // Ama raises it; Ben decides
+
+            assertThat(service.approve(ben, correction)).isInstanceOf(Outcome.Recorded.class);
+
+            assertThat(ledger.repository().loanLifecycle(lent)).isEqualTo(LoanLifecycle.OUTSTANDING);
+            assertThat(net(ben)).isEqualTo(-900);
+        }
+
+        @Test
+        void aRecordAlreadyCorrectedRefusesASecondCorrection() {               // INT-6
+            UUID first = ledger.correction(lent);
+            UUID second = ledger.correction(lent);
+            service.approve(ama, first);
+
+            assertThat(service.approve(ama, second))
+                    .isEqualTo(new Outcome.Rejected("ledger.history.correction.alreadyCorrected"));
+            assertThat(ledger.status(second)).isEqualTo(TransactionStatus.PENDING);
+            assertThat(net(ama)).isZero();
+        }
+
+        @Test
+        void whoeverRaisedTheCorrectionCannotApproveIt() {                     // Ledger.Approval-3
+            UUID correction = ledger.correction(lent);
+
+            assertThatThrownBy(() -> service.approve(ben, correction)).isInstanceOf(NotPermittedException.class);
+            assertThat(ledger.status(correction)).isEqualTo(TransactionStatus.PENDING);
         }
     }
 
@@ -539,6 +611,75 @@ class DualConfirmationServiceIT {
                 assertThat(outcomes).as("round %d", round)
                         .contains(new Outcome.Rejected("ledger.repayment.loan.notOutstanding"));
                 assertThat(net(ben)).as("round %d: every loan repaid exactly once", round).isZero();
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /**
+     * T-Hist-11c through the service. Two corrections of the same loan, both pending,
+     * approved at the same moment, 50 times over. Locking the loan makes exactly one
+     * count; the other is refused as already corrected (INT-6).
+     */
+    @Test
+    void twoCorrectionsOfOneLoanApprovedAtOnceReverseItOnce() throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            for (int round = 0; round < 50; round++) {
+                UUID lent = ledger.approvedLoan(ama, ben, 100, USD);
+                UUID first = ledger.correction(lent);
+                UUID second = ledger.correction(lent);
+                CountDownLatch start = new CountDownLatch(1);
+                Future<Outcome> a = pool.submit(() -> { start.await(); return service.approve(ama, first); });
+                Future<Outcome> b = pool.submit(() -> { start.await(); return service.approve(ama, second); });
+                start.countDown();
+
+                List<Outcome> outcomes = List.of(a.get(), b.get());
+                assertThat(outcomes).as("round %d", round)
+                        .filteredOn(o -> o instanceof Outcome.Recorded).hasSize(1);
+                assertThat(outcomes).as("round %d", round)
+                        .contains(new Outcome.Rejected("ledger.history.correction.alreadyCorrected"));
+                assertThat(net(ben)).as("round %d: every loan reversed exactly once", round).isZero();
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /**
+     * T-Hist-11g. A repayment of a loan and a correction of the same loan, both pending,
+     * approved at the same moment, 50 times over. Both lock the loan, so exactly one is
+     * approved and the other is refused with its own message; the loan is never both
+     * Settled and Reversed (INT-5).
+     */
+    @Test
+    void aRepaymentAndACorrectionOfOneLoanNeverBothCount() throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            for (int round = 0; round < 50; round++) {
+                UUID lent = ledger.approvedLoan(ama, ben, 100, USD);
+                UUID repayment = ledger.repayment(lent);
+                UUID correction = ledger.correction(lent);
+                CountDownLatch start = new CountDownLatch(1);
+                Future<Outcome> a = pool.submit(() -> { start.await(); return service.approve(ama, repayment); });
+                Future<Outcome> b = pool.submit(() -> { start.await(); return service.approve(ama, correction); });
+                start.countDown();
+
+                Outcome repaid = a.get();
+                Outcome corrected = b.get();
+                assertThat(List.of(repaid, corrected)).as("round %d", round)
+                        .filteredOn(o -> o instanceof Outcome.Recorded).hasSize(1);
+                if (repaid instanceof Outcome.Recorded) {
+                    assertThat(corrected).as("round %d", round)
+                            .isEqualTo(new Outcome.Rejected("ledger.history.correction.conflictsWithRepayment"));
+                    assertThat(ledger.repository().loanLifecycle(lent)).isEqualTo(LoanLifecycle.SETTLED);
+                } else {
+                    assertThat(repaid).as("round %d", round)
+                            .isEqualTo(new Outcome.Rejected("ledger.repayment.loan.notOutstanding"));
+                    assertThat(ledger.repository().loanLifecycle(lent)).isEqualTo(LoanLifecycle.REVERSED);
+                }
+                assertThat(net(ben)).as("round %d", round).isZero();
             }
         } finally {
             pool.shutdownNow();

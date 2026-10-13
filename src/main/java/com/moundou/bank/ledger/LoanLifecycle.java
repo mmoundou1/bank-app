@@ -8,15 +8,15 @@ package com.moundou.bank.ledger;
  *   Outstanding --L2 repayment approved--------------> Settled
  *   Outstanding --L3 correction of loan approved-----> Reversed
  *   Settled     --L4 correction of repayment approved-> Outstanding
- *   Reversed    --L5 correction of correction approved-> Outstanding
  * </pre>
+ * Reversed is final: a compensating entry cannot itself be reversed (SRS 1.13).
  */
 public enum LoanLifecycle {
     /** Approved, not settled by an unreversed repayment, not reversed (SRS glossary). */
     OUTSTANDING,
     /** Has an approved repayment that has not itself been reversed. */
     SETTLED,
-    /** Reversed by an approved compensating entry that has not itself been reversed. */
+    /** Reversed by an approved compensating entry. Final. */
     REVERSED,
     /** Not an approved loan at all: pending, declined, cancelled, or another kind. */
     NOT_AN_APPROVED_LOAN
