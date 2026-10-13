@@ -39,8 +39,8 @@ import static org.mockito.Mockito.reset;
 /**
  * Slow suite. MB-12's first PR through the real Spring context: the queue on Home,
  * viewing one item, declining and cancelling, with their transaction, history rows and
- * alerts. Test IDs are from the Test Derivation page. Approving covers loans only
- * (MB-12 PR 2); repayments and corrections come with their locks in PRs 3 and 4.
+ * alerts. Test IDs are from the Test Derivation page. Approving covers loans (MB-12
+ * PR 2) and repayments (PR 3); corrections come with their lock in PR 4.
  *
  * Ama sends, Ben decides, Cleo is a member who is party to nothing here.
  */
@@ -378,11 +378,78 @@ class DualConfirmationServiceIT {
         }
 
         @Test
-        void onlyLoansForNow() {                                                // repayments arrive with their lock in PR 3
-            UUID repayment = ledger.repayment(ledger.approvedLoan(ben, ama, 900, USD));   // Ama repays Ben; Ben decides
+        void correctionsWaitForTheirOwnPullRequest() {                          // MB-12 PR 4
+            UUID correction = ledger.correction(ledger.approvedLoan(ama, ben, 900, USD));   // Ben raises it; Ama decides
 
-            assertThatThrownBy(() -> service.approve(ben, repayment)).isInstanceOf(UnsupportedOperationException.class);
-            assertThat(ledger.status(repayment)).isEqualTo(TransactionStatus.PENDING);
+            assertThatThrownBy(() -> service.approve(ama, correction)).isInstanceOf(UnsupportedOperationException.class);
+            assertThat(ledger.status(correction)).isEqualTo(TransactionStatus.PENDING);
+        }
+    }
+
+    // ---- approving a repayment ----------------------------------------------------
+
+    /**
+     * Ama lent Ben $9.00 and approved it; Ben recorded paying it back, so Ama decides.
+     * On a repayment the payer is the creditor (SRS 4.2), so approving it brings both
+     * positions back to zero.
+     */
+    @Nested
+    class ApproveRepayment {
+
+        UUID lent;
+        UUID repaid;
+
+        @BeforeEach
+        void benOwesAmaAndSaysHePaid() {
+            lent = ledger.approvedLoan(ama, ben, 900, USD);
+            repaid = ledger.repayment(lent);
+        }
+
+        @Test
+        void theLenderApprovesAndTheLoanIsSettled() {                           // T-Repay-4a, Ledger.Repayment-3
+            assertThat(service.approve(ama, repaid)).isInstanceOf(Outcome.Recorded.class);
+
+            assertThat(ledger.status(repaid)).isEqualTo(TransactionStatus.APPROVED);
+            assertThat(ledger.repository().loanLifecycle(lent)).isEqualTo(LoanLifecycle.SETTLED);
+            assertThat(net(ama)).isZero();
+            assertThat(net(ben)).isZero();
+            assertThat(alerts(repaid)).contains(List.of(ben, "settlement_alert"));
+        }
+
+        @Test
+        void theBorrowerCannotApproveTheirOwnRepayment() {                      // T-Repay-3a
+            assertThatThrownBy(() -> service.approve(ben, repaid)).isInstanceOf(NotPermittedException.class);
+            assertThat(ledger.status(repaid)).isEqualTo(TransactionStatus.PENDING);
+        }
+
+        @Test
+        void aSecondRepaymentOfASettledLoanIsRefusedAndStaysPending() {         // Ledger.Repayment-10
+            UUID again = ledger.repayment(lent);
+            service.approve(ama, repaid);
+
+            assertThat(service.approve(ama, again))
+                    .isEqualTo(new Outcome.Rejected("ledger.repayment.loan.notOutstanding"));
+            assertThat(ledger.status(again)).isEqualTo(TransactionStatus.PENDING);
+            assertThat(net(ben)).isZero();
+            assertThat(history(again)).isEmpty();
+        }
+
+        @Test
+        void aRepaymentOfAReversedLoanIsRefusedAndStaysPending() {              // Ledger.Repayment-10, T-Repay-10b
+            ledger.approve(ledger.correction(lent));
+
+            assertThat(service.approve(ama, repaid))
+                    .isEqualTo(new Outcome.Rejected("ledger.repayment.loan.notOutstanding"));
+            assertThat(ledger.status(repaid)).isEqualTo(TransactionStatus.PENDING);
+        }
+
+        @Test
+        void theRefusedRepaymentCanStillBeDeclinedOrCancelled() {               // Ledger.Repayment-10
+            UUID again = ledger.repayment(lent);
+            service.approve(ama, repaid);
+            service.approve(ama, again);
+
+            assertThat(service.cancel(ben, again)).isInstanceOf(Outcome.Recorded.class);
         }
     }
 
@@ -441,6 +508,37 @@ class DualConfirmationServiceIT {
                         .filteredOn(o -> o instanceof Outcome.Recorded).hasSize(1);
                 assertThat(history(item)).as("round %d", round).hasSize(1);
                 assertThat(net(ben)).as("round %d", round).isEqualTo(-100L * (round + 1));
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /**
+     * T-Repay-8b through the service. Ben recorded repaying the same $1.00 loan twice
+     * (two devices); Ama approves both at the same moment, 50 times over. The loan lock
+     * makes exactly one count; the other is refused as no longer outstanding and stays
+     * pending (INT-5, Ledger.Repayment-10).
+     */
+    @Test
+    void twoRepaymentsOfOneLoanApprovedAtOnceSettleItOnce() throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            for (int round = 0; round < 50; round++) {
+                UUID lent = ledger.approvedLoan(ama, ben, 100, USD);
+                UUID first = ledger.repayment(lent);
+                UUID second = ledger.repayment(lent);
+                CountDownLatch start = new CountDownLatch(1);
+                Future<Outcome> a = pool.submit(() -> { start.await(); return service.approve(ama, first); });
+                Future<Outcome> b = pool.submit(() -> { start.await(); return service.approve(ama, second); });
+                start.countDown();
+
+                List<Outcome> outcomes = List.of(a.get(), b.get());
+                assertThat(outcomes).as("round %d", round)
+                        .filteredOn(o -> o instanceof Outcome.Recorded).hasSize(1);
+                assertThat(outcomes).as("round %d", round)
+                        .contains(new Outcome.Rejected("ledger.repayment.loan.notOutstanding"));
+                assertThat(net(ben)).as("round %d: every loan repaid exactly once", round).isZero();
             }
         } finally {
             pool.shutdownNow();
