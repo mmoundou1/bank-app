@@ -123,7 +123,7 @@ All code is under `src/main/java/com/moundou/bank/`.
 | `Amounts` | Parses typed text such as "12.50" into integer minor units (1250), with no floating point anywhere. |
 | `NewTransaction`, `LedgerTransaction` | A row about to be written, and a row read back. |
 | `TransactionKind`, `TransactionStatus`, `LoanLifecycle` | Enums that mirror the database's allowed values. `dbValue()` gives the value as stored in the database. |
-| `TransactionRepository` | All SQL on `transaction`: insert, lock, find, pair balances, and whether a loan is outstanding. Its Javadoc explains the repayment lock (INT-5). For MB-12 it also reads the two approval queues, finds the loan a correction's chain concerns (`chainLoanOf`), and says where that loan would stand if the correction were approved (`loanStandingIfApproved`, CR-15). |
+| `TransactionRepository` | All SQL on `transaction`: insert, lock, find, pair balances, and whether a loan is outstanding. Its Javadoc explains the repayment lock (INT-5). For MB-12 it also reads the two approval queues and whether a row already has an approved correction (`hasApprovedCorrection`). |
 | `LoanStanding` | What `loanStandingIfApproved` returns: is the loan reversed, and how many of its repayments still stand. The service decides from it. |
 | `AuditService` | The administrator's view of two members' dealings. It lives here because it reads ledger data; TD §2 lists it under `identity`. |
 | `LedgerConfig`, `LedgerProperties` | Wiring: the clock and the onboarding end date. |
@@ -207,7 +207,7 @@ Tests sit in `src/test/java` under the same package as the class they test.
 | MB-9 Sign-in | In progress (awaiting a check that sessions survive redeploys) | `identity/GoogleSignIn`, `SignInService`, `web/SecurityConfig`, `SignInController` |
 | MB-10 Roles and profile | In progress (awaiting a check on the live site) | `identity/AdminService`, `ProfileService`, `MemberAdministration`, `ledger/AuditService`, `web/AdminController`, `ProfileController` |
 | MB-11 Transaction entry | In progress (screen built; follow-ups in section 7) | `ledger/EntryService`, `EntryValidator`, `Amounts`, `EntryRequest`; `web/EntryController`, `templates/transactions-new.html`; `identity/MemberDirectory.counterpartiesFor` |
-| MB-12 Approval | In progress | Templates `pending.html`, `queue.html`; queries in `TransactionRepository` (queues, `chainLoanOf`, `loanStandingIfApproved`, `hasApprovedCorrection`), tested in `ApprovalQueriesIT`. Still to write: `TransactionStateMachine` (TD §5), the approval service, and `DualConfirmationController`. |
+| MB-12 Approval | In progress | `TransactionStateMachine` (TD §5), `DualConfirmationService`, `DualConfirmationController`; templates `pending.html`, `queue.html`; queries in `TransactionRepository` (queues, `loanLifecycle`, `hasApprovedCorrection`). Queue, decline, cancel and approving loans and repayments are merged; approving a correction (PR 4) is next. Tested in `DualConfirmationServiceIT`, `DualConfirmationWebTests`, `TransactionStateMachineTests`, `ApprovalQueriesIT`. |
 | MB-13 Repayment | To do | `ledger`. `TransactionRepository.loanLifecycle` is ready for it. |
 | MB-14 History and corrections | To do | `ledger` |
 | MB-15, MB-17 Dashboard and counterparties | To do | `ledger` queries over the `member_net` and `pair_net` views (already in `V1`); `home.html` |

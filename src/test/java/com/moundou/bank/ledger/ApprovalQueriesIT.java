@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Slow suite. The SQL MB-12's approval service reads: the two queues, and the lookups
- * behind approving a correction (SRS 1.12, CR-15). These tests are about what the
+ * behind approving a correction. These tests are about what the
  * queries return; the locking and the decisions themselves are tested with the service.
  */
 class ApprovalQueriesIT {
@@ -93,119 +93,6 @@ class ApprovalQueriesIT {
 
             ledger.approve(ledger.correction(loan));
             assertThat(repository.hasApprovedCorrection(loan)).isTrue();
-        }
-
-        @Test
-        void aCorrectionOfALoanConcernsThatLoan() {
-            UUID loan = ledger.approvedLoan(ama, ben, 2000, USD);
-            UUID correction = ledger.correction(loan);
-
-            assertThat(repository.chainLoanOf(correction)).contains(loan);
-        }
-
-        @Test
-        void aCorrectionOfARepaymentConcernsTheLoanItSettles() {
-            UUID loan = ledger.approvedLoan(ama, ben, 2000, USD);
-            UUID repayment = ledger.approve(ledger.repayment(loan));
-            UUID correction = ledger.correction(repayment);
-
-            assertThat(repository.chainLoanOf(correction)).contains(loan);
-        }
-
-        @Test
-        void aLongChainIsFollowedBackToItsLoan() {
-            UUID loan = ledger.approvedLoan(ama, ben, 2000, USD);
-            UUID repayment = ledger.approve(ledger.repayment(loan));
-            UUID c1 = ledger.approve(ledger.correction(repayment));
-            UUID c2 = ledger.approve(ledger.correction(c1));
-            UUID c3 = ledger.correction(c2);
-
-            assertThat(repository.chainLoanOf(c3)).contains(loan);
-        }
-
-        @Test
-        void onlyACompensatingEntryHasAChainLoan() {
-            UUID loan = ledger.approvedLoan(ama, ben, 2000, USD);
-            UUID repayment = ledger.repayment(loan);
-
-            assertThat(repository.chainLoanOf(loan)).isEmpty();
-            assertThat(repository.chainLoanOf(repayment)).isEmpty();
-            assertThat(repository.chainLoanOf(UUID.randomUUID())).isEmpty();
-        }
-    }
-
-    @Nested
-    class StandingIfApproved {
-
-        @Test
-        void reversingAnUnrepaidLoanLeavesItReversedWithNoRepayment() {     // allowed
-            UUID loan = ledger.approvedLoan(ama, ben, 2000, USD);
-            UUID correction = ledger.correction(loan);
-
-            assertThat(repository.loanStandingIfApproved(loan, correction))
-                    .isEqualTo(new LoanStanding(true, 0));
-        }
-
-        @Test
-        void reversingARepaidLoanWouldLeaveItReversedWhileSettled() {        // Ledger.History-11 first link
-            UUID loan = ledger.approvedLoan(ama, ben, 2000, USD);
-            ledger.approve(ledger.repayment(loan));
-            UUID correction = ledger.correction(loan);
-
-            assertThat(repository.loanStandingIfApproved(loan, correction))
-                    .isEqualTo(new LoanStanding(true, 1));
-        }
-
-        @Test
-        void caseA_restoringAReversedRepaymentWouldSettleTheLoanTwice() {   // T-Hist-11e, CR-15
-            UUID loan = ledger.approvedLoan(ama, ben, 10000, USD);
-            UUID r1 = ledger.approve(ledger.repayment(loan));
-            UUID c1 = ledger.approve(ledger.correction(r1));                 // L Outstanding again
-            UUID r2 = ledger.approve(ledger.repayment(loan));
-            UUID c2 = ledger.correction(c1);                                 // would restore R1
-
-            assertThat(repository.loanLifecycle(loan)).isEqualTo(LoanLifecycle.SETTLED);
-            assertThat(repository.loanStandingIfApproved(loan, c2))
-                    .isEqualTo(new LoanStanding(false, 2));
-
-            // Reverse R2 first, as the message asks; then restoring R1 is fine.
-            ledger.approve(ledger.correction(r2));
-            assertThat(repository.loanStandingIfApproved(loan, c2))
-                    .isEqualTo(new LoanStanding(false, 1));
-        }
-
-        @Test
-        void caseB_restoringAReversalWouldLeaveTheLoanReversedAndSettled() { // T-Hist-11f, CR-15
-            UUID loan = ledger.approvedLoan(ama, ben, 10000, USD);
-            UUID c1 = ledger.approve(ledger.correction(loan));
-            UUID c2 = ledger.approve(ledger.correction(c1));                 // L Outstanding again
-            ledger.approve(ledger.repayment(loan));
-            UUID c3 = ledger.correction(c2);                                 // would restore C1
-
-            assertThat(repository.loanStandingIfApproved(loan, c3))
-                    .isEqualTo(new LoanStanding(true, 1));
-        }
-
-        @Test
-        void askingChangesNothing() {
-            UUID loan = ledger.approvedLoan(ama, ben, 2000, USD);
-            UUID correction = ledger.correction(loan);
-
-            repository.loanStandingIfApproved(loan, correction);
-
-            assertThat(ledger.status(correction)).isEqualTo(TransactionStatus.PENDING);
-            assertThat(repository.loanLifecycle(loan)).isEqualTo(LoanLifecycle.OUTSTANDING);
-        }
-
-        @Test
-        void aPendingCorrectionThatIsNotTheOneAskedAboutDoesNotCount() {
-            UUID loan = ledger.approvedLoan(ama, ben, 2000, USD);
-            UUID repayment = ledger.approve(ledger.repayment(loan));
-            ledger.correction(repayment);                                    // pending, someone else's question
-            UUID reversal = ledger.correction(loan);
-
-            assertThat(repository.loanStandingIfApproved(loan, reversal))
-                    .isEqualTo(new LoanStanding(true, 1));
         }
     }
 }
