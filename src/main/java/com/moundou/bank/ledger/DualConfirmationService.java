@@ -49,9 +49,10 @@ public class DualConfirmationService {
 
         UUID correctsTransactionId = item.correctsTransactionId();
         UUID loanId = item.settlesTransactionId();
+        LedgerTransaction target = null;
 
         if(correctsTransactionId != null) {
-            transactions.lockForUpdate(correctsTransactionId)
+            target = transactions.lockForUpdate(correctsTransactionId)
                         .orElseThrow(() -> new NotPermittedException(actorId, "correct a transaction " + transactionId));
         }
 
@@ -74,12 +75,14 @@ public class DualConfirmationService {
                 if (loanId != null && transactions.loanLifecycle(loanId) != LoanLifecycle.OUTSTANDING)
                     return new Outcome.Rejected("ledger.repayment.loan.notOutstanding");
 
-                if(transactions.hasApprovedCorrection(correctsTransactionId))
-                    return new Outcome.Rejected("ledger.repayment.correction.notPending");
+                if(correctsTransactionId != null) {
+                    if (transactions.hasApprovedCorrection(correctsTransactionId))
+                        return new Outcome.Rejected("ledger.history.correction.alreadyCorrected");
 
-                if(lockedItem.kind() == TransactionKind.LOAN && loanLifecycle(actorId) == LoanLifecycle.SETTLED)
-                    return new Outcome.Rejected("ledger.history.correction.conflictsWithRepayment");
-
+                    if (target.kind() == TransactionKind.LOAN
+                            && transactions.loanLifecycle(target.id()) == LoanLifecycle.SETTLED)
+                        return new Outcome.Rejected("ledger.history.correction.conflictsWithRepayment");
+                }
 
                 transactions.recordHistory(transactionId, TransactionStatus.PENDING, allowedTo.to(), actorId);
                 transactions.recordDecision(transactionId, allowedTo.to(), Instant.now(clock), null);
