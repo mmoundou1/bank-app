@@ -75,12 +75,12 @@ public class RepaymentService {
         }
 
         if (!currency.equals(item.currency())) {
-            errors.put("currency", "ledger.repayment.currency.mismatch");
+            errors.put("", "Repayment must be in the loan's currency.");
             return new Outcome.Rejected(errors);
         }
 
-        if(transactions.loanLifecycle(loanID) != LoanLifecycle.OUTSTANDING) {
-            errors.put("loan", "ledger.repayment.loan.notOutstanding");
+        if(item.kind() != TransactionKind.LOAN) {
+            errors.put("", "This loan is no longer outstanding.");
             return new Outcome.Rejected(errors);
         }
 
