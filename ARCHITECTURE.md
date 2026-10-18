@@ -138,7 +138,8 @@ All code is under `src/main/java/com/moundou/bank/`.
 | `AdminController` | `/admin`, `/admin/allow-list`, `/admin/allow-list/remove`, `/admin/members/{id}/deactivate`, `/admin/audit` | `admin.html`, `audit.html` |
 | `SecurityConfig` | Decides which routes are open, which need sign-in, and which need the administrator role | |
 
-| `DualConfirmationController` *(MB-12: queue, view, decline, cancel, and approve for loans and repayments; corrections to come)* | `GET /pending/{id}`, `POST /pending/{id}/approve`, `POST /pending/{id}/decline`, `POST /transactions/{id}/cancel` (TD §8) | `pending.html`; the queue is `queue.html`, shown on `home.html` |
+| `DualConfirmationController` *(MB-12, done)* | `GET /pending/{id}`, `POST /pending/{id}/approve`, `POST /pending/{id}/decline`, `POST /transactions/{id}/cancel` (TD §8) | `pending.html`; the queue is `queue.html`, shown on `home.html` |
+| `RepaymentController` *(MB-13, being built)* | `GET /repayments/new` (choose a loan), `GET /repayments/new?loan={id}` (the form, amount pre-filled), `POST /repayments` | `repayments-new.html` |
 
 `layout.html` holds the shared `<head>`, styles and navigation, and a `flash`
 fragment that shows `messageKey`/`messageArgs` or `errorKey` after a redirect. Every page pulls
@@ -207,8 +208,8 @@ Tests sit in `src/test/java` under the same package as the class they test.
 | MB-9 Sign-in | In progress (awaiting a check that sessions survive redeploys) | `identity/GoogleSignIn`, `SignInService`, `web/SecurityConfig`, `SignInController` |
 | MB-10 Roles and profile | In progress (awaiting a check on the live site) | `identity/AdminService`, `ProfileService`, `MemberAdministration`, `ledger/AuditService`, `web/AdminController`, `ProfileController` |
 | MB-11 Transaction entry | In progress (screen built; follow-ups in section 7) | `ledger/EntryService`, `EntryValidator`, `Amounts`, `EntryRequest`; `web/EntryController`, `templates/transactions-new.html`; `identity/MemberDirectory.counterpartiesFor` |
-| MB-12 Approval | In progress | `TransactionStateMachine` (TD §5), `DualConfirmationService`, `DualConfirmationController`; templates `pending.html`, `queue.html`; queries in `TransactionRepository` (queues, `loanLifecycle`, `hasApprovedCorrection`). Queue, decline, cancel and approving loans and repayments are merged; approving a correction (PR 4) is next. Tested in `DualConfirmationServiceIT`, `DualConfirmationWebTests`, `TransactionStateMachineTests`, `ApprovalQueriesIT`. |
-| MB-13 Repayment | To do | `ledger`. `TransactionRepository.loanLifecycle` is ready for it. |
+| MB-12 Approval | Done | `TransactionStateMachine` (TD §5), `DualConfirmationService`, `DualConfirmationController`; templates `pending.html`, `queue.html`; queries in `TransactionRepository` (queues, `loanLifecycle`, `hasApprovedCorrection`). Queue, view, decline, cancel (with its alert, CR-18), and approving loans, repayments and corrections. Tested in `DualConfirmationServiceIT`, `DualConfirmationWebTests`, `TransactionStateMachineTests`, `ApprovalQueriesIT`. |
+| MB-13 Repayment | In progress | Template `repayments-new.html`; query `TransactionRepository.outstandingLoansOwedBy` (tested in `RepaymentQueriesIT`); `Formats.plainAmount` pre-fills the amount. Still to write: `RepaymentService`, `RepaymentController`. Approval is MB-12's. |
 | MB-14 History and corrections | To do | `ledger` |
 | MB-15, MB-17 Dashboard and counterparties | To do | `ledger` queries over the `member_net` and `pair_net` views (already in `V1`); `home.html` |
 | MB-18, MB-19 Alerts | To do | `notification`: the worker that sends the outbox rows `EntryService` already writes |
