@@ -64,7 +64,7 @@ public final class EntryValidator {
     }
 
     /** "Today" for this member: the current date in their configured zone (CON-8, Ledger.Entry-12). */
-    public static LocalDate today(Member member) {
+    public LocalDate today(Member member) {
         return LocalDate.now(clock.withZone(member.timeZone()));
     }
 
