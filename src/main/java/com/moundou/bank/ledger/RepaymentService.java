@@ -48,12 +48,15 @@ public class RepaymentService {
 
         Member debtor = members.findById(debtorId).filter(Member::active)
                 .orElseThrow(() -> new NotPermittedException(debtorId, "Member is inactive"));
+        List<LedgerTransaction> list =  transactions.outstandingLoansOwedBy(loanId);
 
         if(!transactions.findById(loanId).orElseThrow().debtor().equals(debtor.id()))
             throw new NotPermittedException(debtor.id(), " is not owner of this loan");
 
         LedgerTransaction transaction = transactions.findById(loanId)
                                                 .orElseThrow(() -> new NotPermittedException(loanId, ""));
+
+        list.stream().filter(t -> t.id().equals(loanId)).findFirst();
 
         return Optional.of(transaction);
     }
@@ -66,15 +69,19 @@ public class RepaymentService {
         String currencyText = repaymentRequest.currencyCode();
         Currency currency;
         Long amount;
+        List<LedgerTransaction> list;
         Map<String, String> errors = new HashMap<>();
         Member debtor = members.findById(actorId).filter(Member::active)
                 .orElseThrow(() -> new NotPermittedException(actorId, "Member is inactive"));
         LocalDate todaysDate = LocalDate.now(clock.withZone(debtor.timeZone()));
 
-        if(Currency.getInstance(currencyText) == null)
-            throw new IllegalArgumentException();
-        else
+        try {
             currency = Currency.getInstance(currencyText);
+        }
+        catch (IllegalArgumentException | NullPointerException e) {
+            errors.put("currency", e.getMessage());
+            return new Outcome.Rejected(errors);
+        }
 
         if (repaymentRequest.submissionKey() != null) {
             Optional<LedgerTransaction> earlier = transactions
@@ -86,6 +93,9 @@ public class RepaymentService {
         LedgerTransaction lockedItem = transactions.lockForUpdate(loanID)
                                                 .orElseThrow(() -> new NotPermittedException(loanID, "does not exist."));
 
+        list =  transactions.outstandingLoansOwedBy(loanID);
+        list.stream().anyMatch(t -> t.id().equals(loanID));
+
         if(!transactions.findById(lockedItem.id()).orElseThrow().debtor().equals(debtor.id()))
             throw new NotPermittedException(actorId, " is not owner of this loan");
 
@@ -93,7 +103,7 @@ public class RepaymentService {
 
             case Amounts.Parsed.Ok ok -> amount = ok.minorUnits();
             case Amounts.Parsed.Invalid invalid -> {
-                errors.put("", invalid.messageKey());
+                errors.put("amount", invalid.messageKey());
                 return new Outcome.Rejected(errors);
             }
 
@@ -109,8 +119,7 @@ public class RepaymentService {
             return new Outcome.Rejected(errors);
         }
 
-        if(transactions.loanLifecycle(lockedItem.id()) != LoanLifecycle.OUTSTANDING
-                || lockedItem.status() != TransactionStatus.PENDING) {
+        if(transactions.loanLifecycle(lockedItem.id()) != LoanLifecycle.OUTSTANDING) {
             errors.put("loan", "ledger.repayment.loan.notOutstanding");
             return new Outcome.Rejected(errors);
         }
