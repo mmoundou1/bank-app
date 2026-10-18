@@ -48,17 +48,9 @@ public class RepaymentService {
 
         Member debtor = members.findById(debtorId).filter(Member::active)
                 .orElseThrow(() -> new NotPermittedException(debtorId, "Member is inactive"));
-        List<LedgerTransaction> list =  transactions.outstandingLoansOwedBy(loanId);
+        List<LedgerTransaction> list =  transactions.outstandingLoansOwedBy(debtorId);
 
-        if(!transactions.findById(loanId).orElseThrow().debtor().equals(debtor.id()))
-            throw new NotPermittedException(debtor.id(), " is not owner of this loan");
-
-        LedgerTransaction transaction = transactions.findById(loanId)
-                                                .orElseThrow(() -> new NotPermittedException(loanId, ""));
-
-        list.stream().filter(t -> t.id().equals(loanId)).findFirst();
-
-        return Optional.of(transaction);
+        return list.stream().filter(t -> t.id().equals(loanId)).findFirst();
     }
 
     @Transactional
@@ -79,7 +71,7 @@ public class RepaymentService {
             currency = Currency.getInstance(currencyText);
         }
         catch (IllegalArgumentException | NullPointerException e) {
-            errors.put("currency", e.getMessage());
+            errors.put("currency", "ledger.repayment.currency.mismatch");
             return new Outcome.Rejected(errors);
         }
 
@@ -93,11 +85,12 @@ public class RepaymentService {
         LedgerTransaction lockedItem = transactions.lockForUpdate(loanID)
                                                 .orElseThrow(() -> new NotPermittedException(loanID, "does not exist."));
 
-        list =  transactions.outstandingLoansOwedBy(loanID);
-        list.stream().anyMatch(t -> t.id().equals(loanID));
+        list =  transactions.outstandingLoansOwedBy(actorId);
 
-        if(!transactions.findById(lockedItem.id()).orElseThrow().debtor().equals(debtor.id()))
-            throw new NotPermittedException(actorId, " is not owner of this loan");
+        if(!list.stream().anyMatch(t -> t.id().equals(loanID))) {
+            errors.put("loan", "ledger.repayment.loan.notOutstanding");
+            return new Outcome.Rejected(errors);
+        }
 
         switch(Amounts.parse(amountText, currency, locale)) {
 
@@ -116,11 +109,6 @@ public class RepaymentService {
 
         if (!currency.equals(lockedItem.currency())) {
             errors.put("currency", "ledger.repayment.currency.mismatch");
-            return new Outcome.Rejected(errors);
-        }
-
-        if(transactions.loanLifecycle(lockedItem.id()) != LoanLifecycle.OUTSTANDING) {
-            errors.put("loan", "ledger.repayment.loan.notOutstanding");
             return new Outcome.Rejected(errors);
         }
 
