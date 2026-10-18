@@ -27,18 +27,19 @@ public class RepaymentController {
     @GetMapping("/repayments")
     public String repayments(@AuthenticationPrincipal SignedInMember me, Model model) {
 
-        List<LedgerTransaction> repayments = repaymentService.outstandingLoansOwedBy(me.memberId()).orElseThrow();
+        List<LedgerTransaction> repayments = repaymentService.outstandingLoansOwedBy(me.memberId());
         model.addAttribute("repayments", repayments);
 
         return "repayments";
     }
 
-    @GetMapping("/repayments/new?loan={id}")
+    @GetMapping("/repayments/new")
     public String repaymentViewFor(@AuthenticationPrincipal SignedInMember me,
-                                                            @RequestParam(required = false) UUID loanId, Model model) {
+                                            @RequestParam(name = "loan", required = false) UUID loan, Model model) {
 
-        LedgerTransaction transaction = repaymentService.viewTransaction(me.memberId(), loanId).orElseThrow();
-        model.addAttribute("transaction", transaction);
+        LedgerTransaction transaction = repaymentService.viewTransaction(me.memberId(), loan).orElseThrow();
+        model.addAttribute("loans", transaction);
+        model.addAttribute("names", )
 
         return "repaymentView";
     }

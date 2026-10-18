@@ -5,6 +5,8 @@ import com.moundou.bank.identity.Member;
 import com.moundou.bank.identity.MemberDirectory;
 import com.moundou.bank.notification.OutboxWriter;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.*;
@@ -21,8 +23,8 @@ public class RepaymentService {
 
     public record RepaymentRequest(UUID loanId, String amountText, String currencyCode, UUID submissionKey) {}
 
-    MemberDirectory members;
-    TransactionRepository transactions;
+    private final MemberDirectory members;
+    private final TransactionRepository transactions;
     private final OutboxWriter outbox;
     private final Clock clock;
 
@@ -33,12 +35,12 @@ public class RepaymentService {
         this.clock = clock;
     }
 
-    public Optional<List<LedgerTransaction>> outstandingLoansOwedBy(UUID debtorId) {
+    public List<LedgerTransaction> outstandingLoansOwedBy(UUID debtorId) {
 
         Member debtor = members.findById(debtorId).filter(Member::active)
                 .orElseThrow(() -> new NotPermittedException(debtorId, "Member is inactive"));
 
-        return Optional.of(transactions.outstandingLoansOwedBy(debtor.id()));
+        return transactions.outstandingLoansOwedBy(debtor.id());
 
     }
 
@@ -46,32 +48,59 @@ public class RepaymentService {
 
         Member debtor = members.findById(debtorId).filter(Member::active)
                 .orElseThrow(() -> new NotPermittedException(debtorId, "Member is inactive"));
+
+        if(!transactions.findById(loanId).orElseThrow().debtor().equals(debtor.id()))
+            throw new NotPermittedException(debtor.id(), " is not owner of this loan");
+
         LedgerTransaction transaction = transactions.findById(loanId)
                                                 .orElseThrow(() -> new NotPermittedException(loanId, ""));
 
         return Optional.of(transaction);
     }
 
+    @Transactional
     public Outcome submit(UUID actorId, RepaymentRequest repaymentRequest, Locale locale) {
 
         UUID loanID = repaymentRequest.loanId();
         String amountText = repaymentRequest.amountText();
-        long amount = Long.parseLong(amountText);
         String currencyText = repaymentRequest.currencyCode();
-        Currency currency = Currency.getInstance(currencyText);
+        Currency currency;
+        Long amount;
         Map<String, String> errors = new HashMap<>();
         Member debtor = members.findById(actorId).filter(Member::active)
                 .orElseThrow(() -> new NotPermittedException(actorId, "Member is inactive"));
-        LedgerTransaction item = transactions.findById(loanID).orElseThrow();
         LocalDate todaysDate = LocalDate.now(clock.withZone(debtor.timeZone()));
 
-        if(!transactions.findById(loanID).orElseThrow().debtor().equals(debtor.id()))
+        if(Currency.getInstance(currencyText) == null)
+            throw new IllegalArgumentException();
+        else
+            currency = Currency.getInstance(currencyText);
+
+        if (repaymentRequest.submissionKey() != null) {
+            Optional<LedgerTransaction> earlier = transactions
+                                                        .findBySubmissionKey(actorId, repaymentRequest.submissionKey());
+            if (earlier.isPresent())
+                return new Outcome.Recorded(earlier.get(), true);
+        }
+
+        LedgerTransaction lockedItem = transactions.lockForUpdate(loanID)
+                                                .orElseThrow(() -> new NotPermittedException(loanID, "does not exist."));
+
+        if(!transactions.findById(lockedItem.id()).orElseThrow().debtor().equals(debtor.id()))
             throw new NotPermittedException(actorId, " is not owner of this loan");
 
-        LedgerTransaction lockedItem = transactions.lockForUpdate(loanID).orElseThrow();
+        switch(Amounts.parse(amountText, currency, locale)) {
+
+            case Amounts.Parsed.Ok ok -> amount = ok.minorUnits();
+            case Amounts.Parsed.Invalid invalid -> {
+                errors.put("", invalid.messageKey());
+                return new Outcome.Rejected(errors);
+            }
+
+        }
 
         if(amount != lockedItem.amountMinor()) {
-            errors.put("", "Amount must settle loan in full.");
+            errors.put("amount", "ledger.repayment.amount.mismatch");
             return new Outcome.Rejected(errors);
         }
 
@@ -80,7 +109,8 @@ public class RepaymentService {
             return new Outcome.Rejected(errors);
         }
 
-        if(transactions.loanLifecycle(loanID) != LoanLifecycle.OUTSTANDING) {
+        if(transactions.loanLifecycle(lockedItem.id()) != LoanLifecycle.OUTSTANDING
+                || lockedItem.status() != TransactionStatus.PENDING) {
             errors.put("loan", "ledger.repayment.loan.notOutstanding");
             return new Outcome.Rejected(errors);
         }
@@ -97,7 +127,7 @@ public class RepaymentService {
                 loanID,
                 null,
                 false,
-                UUID.randomUUID());
+                repaymentRequest.submissionKey);
 
         if (!transactions.insertIfNew(repayment)) {
             return new Outcome.Recorded(
