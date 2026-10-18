@@ -75,15 +75,15 @@ public class RepaymentService {
             return new Outcome.Rejected(errors);
         }
 
+        LedgerTransaction lockedItem = transactions.lockForUpdate(loanID)
+                                                .orElseThrow(() -> new NotPermittedException(loanID, "does not exist."));
+
         if (repaymentRequest.submissionKey() != null) {
             Optional<LedgerTransaction> earlier = transactions
-                                                        .findBySubmissionKey(actorId, repaymentRequest.submissionKey());
+                    .findBySubmissionKey(actorId, repaymentRequest.submissionKey());
             if (earlier.isPresent())
                 return new Outcome.Recorded(earlier.get(), true);
         }
-
-        LedgerTransaction lockedItem = transactions.lockForUpdate(loanID)
-                                                .orElseThrow(() -> new NotPermittedException(loanID, "does not exist."));
 
         list =  transactions.outstandingLoansOwedBy(actorId);
 
@@ -124,7 +124,7 @@ public class RepaymentService {
                 loanID,
                 null,
                 false,
-                repaymentRequest.submissionKey);
+                repaymentRequest.submissionKey());
 
         if (!transactions.insertIfNew(repayment)) {
             return new Outcome.Recorded(
