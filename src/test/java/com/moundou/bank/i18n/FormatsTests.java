@@ -3,6 +3,8 @@ package com.moundou.bank.i18n;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Currency;
 import java.util.Locale;
 
@@ -71,5 +73,16 @@ class FormatsTests {
                 }
             }
         }
+    }
+
+    @Test
+    void aMomentIsShownInTheViewersZoneNotInUtc() {                    // CR-2, T-Con-8a
+        // 23:30 UTC on Oct 4 is still the 4th in New York, already the 5th in Douala.
+        Instant decided = Instant.parse("2026-10-04T23:30:00Z");
+
+        assertThat(spaces(formats.dateTimeIn(decided, ZoneId.of("America/New_York"), Locale.ENGLISH)))
+                .isEqualTo("Oct 4, 2026, 7:30 PM");
+        assertThat(spaces(formats.dateTimeIn(decided, ZoneId.of("Africa/Douala"), Locale.ENGLISH)))
+                .isEqualTo("Oct 5, 2026, 12:30 AM");
     }
 }

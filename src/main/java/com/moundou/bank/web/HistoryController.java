@@ -21,7 +21,7 @@ public class HistoryController {
 
     @GetMapping("/history")
     public String history(@AuthenticationPrincipal SignedInMember me, Model model) {
-        model.addAttribute("history list", historyService.historyFor(me.memberId()));
+        model.addAttribute("entries", historyService.historyFor(me.memberId()));
         model.addAttribute("timeZone", profileService.view(me.memberId()).timeZone());
 
         return "history";

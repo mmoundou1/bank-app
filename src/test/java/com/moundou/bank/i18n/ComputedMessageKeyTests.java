@@ -1,6 +1,7 @@
 package com.moundou.bank.i18n;
 
 import com.moundou.bank.identity.Role;
+import com.moundou.bank.ledger.HistoryDirection;
 import com.moundou.bank.ledger.TransactionKind;
 import com.moundou.bank.ledger.TransactionStatus;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,14 @@ class ComputedMessageKeyTests {
             if (kind != TransactionKind.LOAN) {
                 keys.add("pending.related." + kind.dbValue());
             }
+        }
+        // history.html: the sentence and the kind of record, picked by HistoryService
+        for (HistoryDirection direction : HistoryDirection.values()) {
+            keys.add("history.direction." + direction);
+            keys.add("history.kind." + direction);
+        }
+        for (TransactionStatus status : TransactionStatus.values()) {
+            keys.add("history.status." + status.dbValue());
         }
         assertThat(keys).allSatisfy(key -> assertThat(bundle).as(key).containsKey(key));
     }
