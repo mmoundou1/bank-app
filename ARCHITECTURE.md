@@ -103,7 +103,7 @@ All code is under `src/main/java/com/moundou/bank/`.
 | `SignedInMember` | Who is signed in, as stored in the session. Controllers get it with `@AuthenticationPrincipal`; `memberId()` is the "actor" every service needs. |
 | `GoogleIdentity`, `SignInResult`, `NewMemberAccount` | Plain data passed in and out of `SignInService`. |
 | `AllowList` / `JdbcAllowList`, `MemberAccounts` / `JdbcMemberAccounts` | Data access for sign-in. Each is an interface plus a database version, so `SignInServiceTests` can swap in in-memory versions. |
-| `MemberDirectory` | How *other* modules look up a member (name, time zone, active), and who can be chosen as counterparty (`counterpartiesFor`). The ledger and the entry screen ask here and never read the `member` table themselves. |
+| `MemberDirectory` | How *other* modules look up a member (name, time zone, active), who can be chosen as counterparty (`counterpartiesFor`, active members only), and every member's name (`displayNames`, deactivated members included, for screens that show past transactions). The ledger and the entry screen ask here and never read the `member` table themselves. |
 | `Member`, `MemberAccount`, `Role` | Member records. `Member` is the ledger's view; `MemberAccount` adds the role. |
 | `AdminService` | Administrator operations: the allow-list, deactivation, and the "last administrator" rule. |
 | `MemberAdministration` | SQL for administration and profiles, including the row lock behind the "last administrator" rule. |
@@ -123,7 +123,9 @@ All code is under `src/main/java/com/moundou/bank/`.
 | `Amounts` | Parses typed text such as "12.50" into integer minor units (1250), with no floating point anywhere. |
 | `NewTransaction`, `LedgerTransaction` | A row about to be written, and a row read back. |
 | `TransactionKind`, `TransactionStatus`, `LoanLifecycle` | Enums that mirror the database's allowed values. `dbValue()` gives the value as stored in the database. |
-| `TransactionRepository` | All SQL on `transaction`: insert, lock, find, pair balances, and whether a loan is outstanding. Its Javadoc explains the repayment lock (INT-5). For MB-12 it also reads the two approval queues and whether a row already has an approved correction (`hasApprovedCorrection`). |
+| `TransactionRepository` | All SQL on `transaction`: insert, lock, find, pair balances, and whether a loan is outstanding. Its Javadoc explains the repayment lock (INT-5). For MB-12 it also reads the two approval queues and whether a row already has an approved correction (`hasApprovedCorrection`); for MB-13 the loans a borrower can repay (`outstandingLoansOwedBy`); for MB-14 a member's whole history (`historyFor`). |
+| `RepaymentService` | Records a repayment (MB-13): the loans a borrower may repay (`outstandingLoansOwedBy`), one transaction for the form (`viewTransaction`), and `submit`, which locks the loan and re-checks it with the same query that built the list. Approval is `DualConfirmationService`'s. *(You wrote this one.)* |
+| `HistoryService`, `HistoryEntry`, `HistoryDirection` | The history screen (MB-14). `historyFor(viewer)` turns the viewer's rows into cards: `HistoryDirection` is which sentence a row is for this viewer (D2: on a repayment the creditor is the borrower), and a correction carries its target's direction and date. The words are in `messages.properties`. *(You wrote these.)* |
 | `LoanStanding` | What `loanStandingIfApproved` returns: is the loan reversed, and how many of its repayments still stand. The service decides from it. |
 | `AuditService` | The administrator's view of two members' dealings. It lives here because it reads ledger data; TD §2 lists it under `identity`. |
 | `LedgerConfig`, `LedgerProperties` | Wiring: the clock and the onboarding end date. |
@@ -139,7 +141,8 @@ All code is under `src/main/java/com/moundou/bank/`.
 | `SecurityConfig` | Decides which routes are open, which need sign-in, and which need the administrator role | |
 
 | `DualConfirmationController` *(MB-12, done)* | `GET /pending/{id}`, `POST /pending/{id}/approve`, `POST /pending/{id}/decline`, `POST /transactions/{id}/cancel` (TD §8) | `pending.html`; the queue is `queue.html`, shown on `home.html` |
-| `RepaymentController` *(MB-13, being built)* | `GET /repayments/new` (choose a loan), `GET /repayments/new?loan={id}` (the form, amount pre-filled), `POST /repayments` | `repayments-new.html` |
+| `RepaymentController` *(MB-13, done)* | `GET /repayments/new` (choose a loan), `GET /repayments/new?loan={id}` (the form, amount pre-filled), `POST /repayments` | `repayments-new.html` |
+| `HistoryController` *(MB-14)* | `GET /history` | `history.html` |
 
 `layout.html` holds the shared `<head>`, styles and navigation, and a `flash`
 fragment that shows `messageKey`/`messageArgs` or `errorKey` after a redirect. Every page pulls
@@ -209,8 +212,8 @@ Tests sit in `src/test/java` under the same package as the class they test.
 | MB-10 Roles and profile | In progress (awaiting a check on the live site) | `identity/AdminService`, `ProfileService`, `MemberAdministration`, `ledger/AuditService`, `web/AdminController`, `ProfileController` |
 | MB-11 Transaction entry | In progress (screen built; follow-ups in section 7) | `ledger/EntryService`, `EntryValidator`, `Amounts`, `EntryRequest`; `web/EntryController`, `templates/transactions-new.html`; `identity/MemberDirectory.counterpartiesFor` |
 | MB-12 Approval | Done | `TransactionStateMachine` (TD §5), `DualConfirmationService`, `DualConfirmationController`; templates `pending.html`, `queue.html`; queries in `TransactionRepository` (queues, `loanLifecycle`, `hasApprovedCorrection`). Queue, view, decline, cancel (with its alert, CR-18), and approving loans, repayments and corrections. Tested in `DualConfirmationServiceIT`, `DualConfirmationWebTests`, `TransactionStateMachineTests`, `ApprovalQueriesIT`. |
-| MB-13 Repayment | In progress | Template `repayments-new.html`; query `TransactionRepository.outstandingLoansOwedBy` (tested in `RepaymentQueriesIT`); `Formats.plainAmount` pre-fills the amount. Still to write: `RepaymentService`, `RepaymentController`. Approval is MB-12's. |
-| MB-14 History and corrections | To do | `ledger` |
+| MB-13 Repayment | Done (PR #28) | `RepaymentService`, `RepaymentController`; template `repayments-new.html`; query `TransactionRepository.outstandingLoansOwedBy`; `Formats.plainAmount` pre-fills the amount. Approval is MB-12's. Tested in `RepaymentServiceIT`, `RepaymentQueriesIT`, `RepaymentLockIT`, `RepaymentWebTests`, `RepaymentTemplatesTests`. |
+| MB-14 History and corrections | In progress (history screen done; raising a correction is next) | `HistoryService`, `HistoryEntry`, `HistoryDirection`; `HistoryController`, template `history.html`; queries `TransactionRepository.historyFor`, `MemberDirectory.displayNames`; `Formats.dateTimeIn` for decision times. Tested in `HistoryServiceIT`, `HistoryQueriesIT`, `HistoryWebTests`, `HistoryTemplatesTests`. Approving a correction is MB-12's. Still to write: raising a compensating entry (`Ledger.History-5`, `-8` to `-11`). |
 | MB-15, MB-17 Dashboard and counterparties | To do | `ledger` queries over the `member_net` and `pair_net` views (already in `V1`); `home.html` |
 | MB-18, MB-19 Alerts | To do | `notification`: the worker that sends the outbox rows `EntryService` already writes |
 | MB-6 Hosting | Partly done | Render, Neon and Google are live. Still to do: email provider, keep-alive scheduler, switching to Neon's direct endpoint |
