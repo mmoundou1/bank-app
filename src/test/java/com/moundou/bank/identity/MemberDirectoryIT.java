@@ -7,6 +7,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,6 +46,16 @@ class MemberDirectoryIT {
         assertThat(directory.counterpartiesFor(me))
                 .extracting(Member::displayName)
                 .containsExactly("ben", "Chloe");        // not me, not Ama; case ignored in the order
+    }
+
+    @Test
+    void displayNamesIncludeDeactivatedMembers() {     // T-Roles-7a: their history keeps their name
+        UUID ama = fixtures.member("Ama");
+        UUID ben = fixtures.member("Ben");
+        jdbc.sql("UPDATE member SET status = 'deactivated' WHERE member_id = :id").param("id", ben).update();
+
+        assertThat(directory.displayNames())
+                .containsOnly(Map.entry(ama, "Ama"), Map.entry(ben, "Ben"));
     }
 
     @Test
