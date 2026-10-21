@@ -60,7 +60,7 @@ public class RepaymentService {
         String amountText = repaymentRequest.amountText();
         String currencyText = repaymentRequest.currencyCode();
         Currency currency;
-        Long amount;
+        long amount;
         List<LedgerTransaction> list;
         Map<String, String> errors = new HashMap<>();
         Member debtor = members.findById(actorId).filter(Member::active)

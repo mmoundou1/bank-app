@@ -3,7 +3,6 @@ package com.moundou.bank.web;
 import com.moundou.bank.identity.ProfileService;
 import com.moundou.bank.identity.SignedInMember;
 import com.moundou.bank.ledger.HistoryService;
-import com.moundou.bank.ledger.LedgerTransaction;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
