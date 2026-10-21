@@ -10,6 +10,10 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.springframework.stereotype.Service;
+
+// CHANGED (finding 1): without @Service, Spring never creates this class.
+@Service
 public class HistoryService {
 
     private final TransactionRepository transactions;
@@ -59,38 +63,21 @@ public class HistoryService {
         Instant decidedAt;
         boolean openingBalance;
 
-        if(row.kind() == TransactionKind.LOAN) {
-            if(row.creditor().equals(viewerId)) {
-                direction = HistoryDirection.YOU_LENT;
-                counterPartyId = rowsById.get(viewerId).debtor();
-                counterParty = names.get(counterPartyId);
-            }
+        // CHANGED (findings 2 and 3). The direction rule now lives in directionOf()
+        // below, so the row and a correction's target share one copy of it.
+        direction = directionOf(row, viewerId);
 
-            else if(row.debtor().equals(viewerId)) {
-                direction = HistoryDirection.YOU_BORROWED;
-                counterPartyId = rowsById.get(viewerId).creditor();
-                counterParty = names.get(counterPartyId);
-            }
-        }
+        // CHANGED (finding 2). The other party is on the row itself: whichever of
+        // creditor and debtor is not the viewer. No map is needed for this.
+        counterPartyId = row.creditor().equals(viewerId) ? row.debtor() : row.creditor();
+        counterParty = names.get(counterPartyId);
 
-        else if(row.kind() == TransactionKind.REPAYMENT) {
-            if(row.creditor().equals(viewerId)) {
-                direction = HistoryDirection.YOU_REPAID;
-                counterPartyId = rowsById.get(viewerId).debtor();
-                counterParty = names.get(counterPartyId);
-            }
-
-            else if(row.debtor().equals(viewerId)) {
-                direction = HistoryDirection.YOU_WERE_REPAID;
-                counterPartyId = rowsById.get(viewerId).creditor();
-                counterParty = names.get(counterPartyId);
-            }
-        }
-
-        else if(row.kind() == TransactionKind.COMPENSATING) {
-            targetDirection = HistoryDirection.CORRECTION;
-            UUID correctsTransactionId = row.correctsTransactionId();
-            targetDate = rowsById.get(correctsTransactionId).transactionDate();
+        // CHANGED (finding 3). A correction's own direction is CORRECTION (set by
+        // directionOf); targetDirection is the target's sentence for this viewer.
+        if (row.kind() == TransactionKind.COMPENSATING) {
+            LedgerTransaction target = rowsById.get(row.correctsTransactionId());
+            targetDirection = directionOf(target, viewerId);
+            targetDate = target.transactionDate();
         }
 
         if(row.initiatedBy().equals(viewerId))
@@ -122,6 +109,21 @@ public class HistoryService {
 
         return entry;
 
+    }
+
+    /**
+     * ADDED (finding 3). Which of the five sentences {@code row} is for {@code viewerId}.
+     * Your four loan and repayment cases, unchanged; only moved here so that toEntry can
+     * use them twice. Creditor and debtor are this row's own effect (D2), so on a
+     * repayment the creditor is the borrower: the one who paid.
+     */
+    private static HistoryDirection directionOf(LedgerTransaction row, UUID viewerId) {
+        boolean viewerIsCreditor = row.creditor().equals(viewerId);
+        if (row.kind() == TransactionKind.LOAN)
+            return viewerIsCreditor ? HistoryDirection.YOU_LENT : HistoryDirection.YOU_BORROWED;
+        if (row.kind() == TransactionKind.REPAYMENT)
+            return viewerIsCreditor ? HistoryDirection.YOU_REPAID : HistoryDirection.YOU_WERE_REPAID;
+        return HistoryDirection.CORRECTION;
     }
 
 }
