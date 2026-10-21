@@ -69,4 +69,17 @@ public class Formats {
     public String dateIn(Instant instant, ZoneId zone) {
         return date(instant.atZone(zone).toLocalDate());
     }
+
+    /**
+     * A moment, shown as date and time in the viewer's own zone (SRS 1.2, CR-2), such as
+     * a decision timestamp on the history screen: "Oct 4, 2026, 2:02 PM".
+     */
+    public String dateTimeIn(Instant instant, ZoneId zone) {
+        return dateTimeIn(instant, zone, LocaleContextHolder.getLocale());
+    }
+
+    public String dateTimeIn(Instant instant, ZoneId zone, Locale locale) {
+        return instant.atZone(zone).format(
+                DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withLocale(locale));
+    }
 }

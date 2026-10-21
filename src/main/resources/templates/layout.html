@@ -31,6 +31,7 @@
   <a th:href="@{/}" th:text="#{nav.home}">Home</a>
   <a th:href="@{/transactions/new}" th:text="#{nav.entry}">Log a transaction</a>
   <a th:href="@{/repayments/new}" th:text="#{nav.repayment}">Record a repayment</a>
+  <a th:href="@{/history}" th:text="#{nav.history}">History</a>
   <a th:href="@{/profile}" th:text="#{nav.profile}">Profile</a>
   <a sec:authorize="hasRole('FAMILY_ADMINISTRATOR')"
      th:href="@{/admin}" th:text="#{nav.admin}">Administration</a>
