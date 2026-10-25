@@ -361,6 +361,31 @@ public class TransactionRepository {
                 .query(TransactionRepository::mapRow).list();
     }
 
+    // ---- MB-14: the history screen ------------------------------------------------------
+
+    /**
+     * Every transaction {@code memberId} is a party to, in any status and of any kind
+     * (Ledger.History-1, -2). Newest first: by transaction date, then by when it was
+     * recorded, then by id, so rows from the same moment keep the same order on every
+     * load.
+     *
+     * Being a party means being creditor or debtor. The initiator is always one of the
+     * two, so this also covers everything the member recorded.
+     *
+     * The target of every correction in the result is in the result too: a correction
+     * is between the same two members as the row it reverses, so the caller can find it
+     * here without another query.
+     *
+     * Filtered by the member here, not by the caller (Ledger.History-7, SEC-2).
+     */
+    public List<LedgerTransaction> historyFor(UUID memberId) {
+        return jdbc.sql("SELECT " + COLUMNS + " FROM transaction"
+                        + " WHERE creditor_id = :me OR debtor_id = :me"
+                        + " ORDER BY transaction_date DESC, created_at DESC, transaction_id DESC")
+                .param("me", memberId)
+                .query(TransactionRepository::mapRow).list();
+    }
+
     // ---- MB-12: approving a correction ----------------------------------------------------
 
     /**

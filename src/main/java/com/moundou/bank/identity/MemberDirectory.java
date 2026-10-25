@@ -7,8 +7,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Read access to members for other modules (Technical Design 2: no module reaches into
@@ -51,6 +53,24 @@ public class MemberDirectory {
                 .param("me", memberId)
                 .query(MemberDirectory::member)
                 .list();
+    }
+
+    /**
+     * Every member's display name, keyed by id, <em>including deactivated members</em>.
+     * For screens that show past transactions, such as the history (MB-14): a
+     * deactivated member's transactions are kept and still shown (Auth.Roles-7, Data-4),
+     * so their name must still be found.
+     *
+     * <p>Not for choosing a counterparty; use {@link #counterpartiesFor} for that, which
+     * leaves deactivated members out (Auth.Roles-4).
+     */
+    public Map<UUID, String> displayNames() {
+        return jdbc.sql("SELECT member_id, display_name FROM member")
+                .query((rs, rowNum) -> Map.entry(
+                        rs.getObject("member_id", UUID.class),
+                        rs.getString("display_name")))
+                .list().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     /** Turns one row of the queries above into a {@link Member}. */

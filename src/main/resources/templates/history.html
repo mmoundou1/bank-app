@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.language}">
+<!--/* The signed-in member's history (MB-14; Ledger.History-1 to -7). Read-only: no row
+  has an edit, delete or correct control (Ledger.History-4). The correct control arrives
+  with journey 2, the compensating entry.
+
+  Model:
+    entries   List<HistoryEntry>  HistoryService.historyFor(me), already newest first
+    timeZone  ZoneId              the viewer's zone, for decision timestamps (CR-2)
+
+  Each card is one sentence from the viewer's side, picked by the service as a
+  HistoryDirection and worded here (history.direction.*), so the words stay in
+  messages.properties (I18N-1). A correction's sentence quotes the sentence of the record
+  it undoes, worked out for the same viewer.
+
+  transactionDate is a calendar date and is never converted; decidedAt is a moment and is
+  shown in the viewer's zone, and is null while pending.
+*/-->
+<head th:replace="~{layout :: head('history.pageTitle')}"><title>History</title></head>
+<body>
+<nav th:replace="~{layout :: nav}"></nav>
+<main>
+  <h1 th:text="#{history.title}">Your history</h1>
+
+  <p th:if="${entries.isEmpty()}" class="muted" th:text="#{history.none}">No transactions yet.</p>
+
+  <ul class="rows">
+    <li th:each="e : ${entries}"
+        th:with="amount=${@formats.amount(e.amountMinor(), e.currency())},
+                 sentence=${e.targetDirection() == null
+                     ? #messages.msg('history.direction.' + e.direction(), e.otherPartyName(), amount)
+                     : #messages.msg('history.direction.CORRECTION',
+                           #messages.msg('history.direction.' + e.targetDirection(), e.otherPartyName(), amount),
+                           @formats.date(e.targetDate()))}">
+      <span>
+        <!-- Line 1: who owes or paid whom, and how much (USE-3) -->
+        <strong th:text="${sentence}">Ama lent you $20.00</strong><br>
+
+        <!-- Line 2: what kind of record, its date, and whether it is an opening balance -->
+        <span class="hint" th:text="#{${'history.kind.' + e.direction()}}">Loan</span>
+        <span class="hint" aria-hidden="true">·</span>
+        <span class="hint" th:text="${@formats.date(e.transactionDate())}">Oct 3, 2026</span>
+        <span th:if="${e.openingBalance()}" class="hint" aria-hidden="true">·</span>
+        <span th:if="${e.openingBalance()}" class="hint" th:text="#{history.openingBalance}">Opening balance</span><br>
+
+        <!-- Line 3: who recorded it -->
+        <span class="hint" th:text="${e.recordedByYou()} ? #{history.recordedByYou} : #{history.recordedBy(${e.otherPartyName()})}">Recorded by Ama</span><br>
+
+        <!-- Line 4: the note, only when there is one -->
+        <span th:if="${e.note() != null}" th:text="${e.note()}">For the school fees</span><br th:if="${e.note() != null}">
+
+        <!-- Line 5: the status, and when it was decided, in the viewer's zone (Ledger.History-2, -6) -->
+        <span class="hint" th:if="${e.decidedAt() == null}"
+              th:text="#{${'history.status.' + e.status().dbValue()}}">Pending approval · not decided yet</span>
+        <span class="hint" th:if="${e.decidedAt() != null}"
+              th:text="#{${'history.status.' + e.status().dbValue()}(${@formats.dateTimeIn(e.decidedAt(), timeZone)})}">Approved on Oct 4, 2026, 2:02 PM</span>
+
+        <!-- The decline reason, only on declined rows that have one (Ledger.History-3) -->
+        <br th:if="${e.declineReason() != null}">
+        <span th:if="${e.declineReason() != null}" class="hint"
+              th:text="#{history.declineReason(${e.declineReason()})}">Reason: not mine</span>
+      </span>
+    </li>
+  </ul>
+</main>
+</body>
+</html>
