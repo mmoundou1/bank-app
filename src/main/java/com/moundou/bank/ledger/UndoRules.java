@@ -1,6 +1,9 @@
 package com.moundou.bank.ledger;
 
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Whether a record can be undone by a compensating entry, and if not, why
@@ -18,10 +21,15 @@ public final class UndoRules {
     private UndoRules() {
     }
 
-    /** The answer: undoable, or refused with the message key that says why. */
+    /**
+     * The answer: undoable, or refused with the message key that says why.
+     */
     public sealed interface Check {
-        record Undoable() implements Check { }
-        record Refused(String messageKey) implements Check { }
+        record Undoable() implements Check {
+        }
+
+        record Refused(String messageKey) implements Check {
+        }
     }
 
     /**
@@ -31,6 +39,27 @@ public final class UndoRules {
      *                ignored, so the history can pass its whole list.
      */
     public static Check check(LedgerTransaction target, List<LedgerTransaction> related) {
-        throw new UnsupportedOperationException("UndoRules.check: yours to write");
+        Optional<LedgerTransaction> approvedRepayment = related.stream()
+                .filter(tx -> tx.kind() == TransactionKind.REPAYMENT
+                        && tx.status() == TransactionStatus.APPROVED).findFirst();
+
+        if (target.kind() == TransactionKind.COMPENSATING)
+            return new Check.Refused("TBD");
+        if (target.status() != TransactionStatus.APPROVED)
+            return new Check.Refused("TBD");
+        if (approvedRepayment.isPresent()) {
+            UUID repaymentId = approvedRepayment.get().id();
+
+            boolean isFound = related.stream()
+                    .anyMatch(tx -> tx.kind() == TransactionKind.COMPENSATING
+                            && tx.status() == TransactionStatus.APPROVED
+                            && Objects.equals(tx.settlesTransactionId(), repaymentId));
+
+            if (isFound)
+                return new Check.Refused("TBD");
+        }
+
+        return new Check.Undoable();
     }
+    
 }

@@ -14,9 +14,9 @@ import java.util.*;
 public class DualConfirmationService {
 
     public sealed interface Outcome {
-        record Recorded(LedgerTransaction transaction) implements DualConfirmationService.Outcome {
+        record Recorded(LedgerTransaction transaction) implements Outcome {
         }
-        record Rejected(String reason) implements DualConfirmationService.Outcome {
+        record Rejected(String reason) implements Outcome {
         }
     }
 
