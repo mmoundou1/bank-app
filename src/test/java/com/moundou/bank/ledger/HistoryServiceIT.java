@@ -192,6 +192,45 @@ class HistoryServiceIT {
         assertThat(history.historyFor(ama)).isEmpty();
     }
 
+    // ---- the undo link (MB-14 journey 2) ------------------------------------------------
+
+    @Test
+    void anApprovedLoanOffersUndoToBothParties() {
+        UUID lent = ledger.approvedLoan(ama, ben, 2000, USD);
+        assertThat(entryFor(ama, lent).undo()).isEqualTo(HistoryEntry.UndoLink.SHOW);
+        assertThat(entryFor(ben, lent).undo()).isEqualTo(HistoryEntry.UndoLink.SHOW);
+        assertThat(entryFor(ben, lent).id()).isEqualTo(lent);
+    }
+
+    @Test
+    void aRepaidLoanSaysToUndoTheRepaymentFirstAndTheRepaymentOffersUndo() {   // decision 1
+        UUID lent = ledger.approvedLoan(ama, ben, 2000, USD);
+        UUID repaid = ledger.approve(ledger.repayment(lent));
+
+        assertThat(entryFor(ben, lent).undo()).isEqualTo(HistoryEntry.UndoLink.REPAYMENT_FIRST);
+        assertThat(entryFor(ben, repaid).undo()).isEqualTo(HistoryEntry.UndoLink.SHOW);
+    }
+
+    @Test
+    void aPendingCorrectionHidesTheLinkOnItsTarget() {                          // decision 3
+        UUID lent = ledger.approvedLoan(ama, ben, 2000, USD);
+        UUID pending = ledger.correction(lent);
+
+        assertThat(entryFor(ben, lent).undo()).isEqualTo(HistoryEntry.UndoLink.NONE);
+        assertThat(entryFor(ben, pending).undo()).as("a correction").isEqualTo(HistoryEntry.UndoLink.NONE);
+
+        ledger.decline(pending);
+        assertThat(entryFor(ben, lent).undo()).as("declined, so offered again").isEqualTo(HistoryEntry.UndoLink.SHOW);
+    }
+
+    @Test
+    void recordsThatNeverCountedOfferNothing() {
+        UUID pending = ledger.loan(ama, ben, 2000, USD);
+        UUID declined = ledger.decline(ledger.loan(ama, ben, 300, USD));
+        assertThat(entryFor(ben, pending).undo()).isEqualTo(HistoryEntry.UndoLink.NONE);
+        assertThat(entryFor(ben, declined).undo()).isEqualTo(HistoryEntry.UndoLink.NONE);
+    }
+
     // ---- helpers --------------------------------------------------------------------
 
     private static HistoryEntry only(List<HistoryEntry> entries) {

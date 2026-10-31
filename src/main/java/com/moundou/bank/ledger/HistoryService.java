@@ -42,13 +42,13 @@ public class HistoryService {
                         Function.identity()));
 
         for (LedgerTransaction row : rows)
-            history.add(toEntry(row, viewer.id(), rowsById, names));
+            history.add(toEntry(row, viewer.id(), rows, rowsById, names));
 
         return history;
 
     }
 
-    private static HistoryEntry toEntry(LedgerTransaction row, UUID viewerId,
+    private static HistoryEntry toEntry(LedgerTransaction row, UUID viewerId, List<LedgerTransaction> rows,
                                                         Map<UUID, LedgerTransaction> rowsById, Map<UUID, String> names) {
 
         HistoryDirection direction = null;
@@ -58,20 +58,18 @@ public class HistoryService {
         String counterParty = null;
         boolean recordedByYou = false;
 
-        // CHANGED (findings 2 and 3). The direction rule now lives in directionOf()
-        // below, so the row and a correction's target share one copy of it.
-        direction = directionOf(row, viewerId);
+        // One direction rule, for the row and for a correction's target.
+        direction = HistoryDirection.of(row, viewerId);
 
-        // CHANGED (finding 2). The other party is on the row itself: whichever of
-        // creditor and debtor is not the viewer. No map is needed for this.
+        // The other party: whichever of creditor and debtor is not the viewer.
         counterPartyId = row.creditor().equals(viewerId) ? row.debtor() : row.creditor();
         counterParty = names.get(counterPartyId);
 
-        // CHANGED (finding 3). A correction's own direction is CORRECTION (set by
+        // A correction's own direction is CORRECTION (set by
         // directionOf); targetDirection is the target's sentence for this viewer.
         if (row.kind() == TransactionKind.COMPENSATING) {
             LedgerTransaction target = rowsById.get(row.correctsTransactionId());
-            targetDirection = directionOf(target, viewerId);
+            targetDirection = HistoryDirection.of(target, viewerId);
             targetDate = target.transactionDate();
         }
 
@@ -90,17 +88,32 @@ public class HistoryService {
                 row.decidedAt(),
                 row.openingBalance(),
                 targetDirection,
-                targetDate);
+                targetDate,
+                row.id(),
+                undoLink(row, rows));
 
     }
 
-    private static HistoryDirection directionOf(LedgerTransaction row, UUID viewerId) {
-        boolean viewerIsCreditor = row.creditor().equals(viewerId);
-        if (row.kind() == TransactionKind.LOAN)
-            return viewerIsCreditor ? HistoryDirection.YOU_LENT : HistoryDirection.YOU_BORROWED;
-        if (row.kind() == TransactionKind.REPAYMENT)
-            return viewerIsCreditor ? HistoryDirection.YOU_REPAID : HistoryDirection.YOU_WERE_REPAID;
-        return HistoryDirection.CORRECTION;
+    /**
+     * The undo link for one card: UndoRules decides whether the record
+     * can be undone, using the whole history (it ignores rows that point elsewhere), and
+     * the link is also hidden while a correction of it is pending (decision 3, display
+     * only, so it is not part of UndoRules).
+     */
+    private static HistoryEntry.UndoLink undoLink(LedgerTransaction row, List<LedgerTransaction> rows) {
+        boolean correctionPending = rows.stream()
+                .anyMatch(tx -> tx.kind() == TransactionKind.COMPENSATING
+                        && tx.status() == TransactionStatus.PENDING
+                        && row.id().equals(tx.correctsTransactionId()));
+        if (correctionPending)
+            return HistoryEntry.UndoLink.NONE;
+        return switch (UndoRules.check(row, rows)) {
+            case UndoRules.Check.Undoable undoable -> HistoryEntry.UndoLink.SHOW;
+            case UndoRules.Check.Refused refused ->
+                    "ledger.history.correction.conflictsWithRepayment".equals(refused.messageKey())
+                            ? HistoryEntry.UndoLink.REPAYMENT_FIRST
+                            : HistoryEntry.UndoLink.NONE;
+        };
     }
 
 }

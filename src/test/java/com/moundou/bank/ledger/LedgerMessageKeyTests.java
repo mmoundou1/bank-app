@@ -43,7 +43,7 @@ class LedgerMessageKeyTests {
     }
 
     /**
-     * The approval service returns its keys as string literals in Outcome.Rejected, so
+     * The approval service returns its keys as string literals in Outcome.Refused, so
      * reflection cannot find them; read them from the source instead.
      */
     @Test

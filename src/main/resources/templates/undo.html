@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.language}">
+<!--/* Undoing a record (MB-14 journey 2; Ledger.History-5, -8 to -10). Wireframe screen 2.
+  Reached from "Undo this record" on a history card. Shown only for a record UndoRules
+  says can be undone; the controller sends anything else back to the history.
+
+  Model:
+    target          LedgerTransaction  the record being undone
+    direction       HistoryDirection   its sentence for the viewer (HistoryDirection.of)
+    otherPartyName  String             the other member, who confirms the correction
+    submissionKey   UUID               rendered once, sent back unchanged (Ledger.Entry-14 applies too)
+
+  The amount is shown, never asked for: a correction is a full reversal (Ledger.History-10).
+  POSTs note and submissionKey to /history/{id}/undo; both outcomes redirect to /history.
+*/-->
+<head th:replace="~{layout :: head('history.undo.pageTitle')}"><title>Undo a record</title></head>
+<body>
+<nav th:replace="~{layout :: nav}"></nav>
+<main th:with="amount=${@formats.amount(target.amountMinor(), target.currency())}">
+  <h1 th:text="#{history.undo.title}">Undo a record</h1>
+
+  <p class="hint" th:text="#{history.undo.undoing}">You're undoing:</p>
+  <ul class="rows">
+    <li>
+      <span>
+        <strong th:text="#{${'history.direction.' + direction}(${otherPartyName}, ${amount})}">You borrowed $20.00 from Ama</strong><br>
+        <span class="hint" th:text="#{${'history.kind.' + direction}}">Loan</span>
+        <span class="hint" aria-hidden="true">·</span>
+        <span class="hint" th:text="${@formats.date(target.transactionDate())}">Sep 3, 2026</span>
+      </span>
+    </li>
+  </ul>
+
+  <p th:text="#{history.undo.explain(${amount})}">This adds a correction for $20.00 going the other way, so the two cancel out. The original stays in your history, unchanged.</p>
+  <p th:text="#{history.undo.amount(${amount})}">Amount: $20.00 (can't be changed)</p>
+  <p th:text="#{history.undo.confirms(${otherPartyName})}">Ama confirms it before your balances change.</p>
+
+  <form th:action="@{/history/{id}/undo(id=${target.id()})}" method="post">
+    <input type="hidden" name="submissionKey" th:value="${submissionKey}">
+    <label for="note" th:text="#{history.undo.note.label}">Why are you undoing it? (optional)</label>
+    <input type="text" id="note" name="note">
+    <p>
+      <button type="submit" th:text="#{history.undo.send(${otherPartyName})}">Send to Ama</button>
+      <a th:href="@{/history}" th:text="#{history.undo.cancel}">Cancel</a>
+    </p>
+  </form>
+</main>
+</body>
+</html>

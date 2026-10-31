@@ -14,9 +14,9 @@ import java.util.*;
 public class DualConfirmationService {
 
     public sealed interface Outcome {
-        record Recorded(LedgerTransaction transaction) implements DualConfirmationService.Outcome {
+        record Recorded(LedgerTransaction transaction) implements Outcome {
         }
-        record Rejected(String reason) implements DualConfirmationService.Outcome {
+        record Rejected(String reason) implements Outcome {
         }
     }
 
@@ -76,6 +76,12 @@ public class DualConfirmationService {
                     return new Outcome.Rejected("ledger.repayment.loan.notOutstanding");
 
                 if(correctsTransactionId != null) {
+                    // Second guard behind CompensationService (CR-17): a correction of a
+                    // correction is refused when raised, and refused here too in case one
+                    // was written some other way. The schema does not prevent it.
+                    if (target.kind() == TransactionKind.COMPENSATING)
+                        return new Outcome.Rejected("ledger.history.undo.isCorrection");
+
                     if (transactions.hasApprovedCorrection(correctsTransactionId))
                         return new Outcome.Rejected("ledger.history.correction.alreadyCorrected");
 

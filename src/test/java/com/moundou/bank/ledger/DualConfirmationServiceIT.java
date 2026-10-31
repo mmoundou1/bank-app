@@ -487,6 +487,17 @@ class DualConfirmationServiceIT {
         }
 
         @Test
+        void aCorrectionOfACorrectionIsRefusedAndStaysPending() {              // T-Hist-9c, CR-17 second guard
+            UUID first = ledger.approve(ledger.correction(lent));
+            UUID second = ledger.correction(first);                            // written directly; Ama raised it
+
+            assertThat(service.approve(ben, second))
+                    .isEqualTo(new Outcome.Rejected("ledger.history.undo.isCorrection"));
+            assertThat(ledger.status(second)).isEqualTo(TransactionStatus.PENDING);
+            assertThat(ledger.repository().loanLifecycle(lent)).as("still undone").isEqualTo(LoanLifecycle.REVERSED);
+        }
+
+        @Test
         void aRepaidLoanCannotBeCorrectedUntilItsRepaymentIs() {               // T-Hist-11a, T-Hist-11b
             UUID repaid = ledger.approve(ledger.repayment(lent));
             UUID correction = ledger.correction(lent);

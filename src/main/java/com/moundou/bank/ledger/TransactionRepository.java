@@ -386,6 +386,26 @@ public class TransactionRepository {
                 .query(TransactionRepository::mapRow).list();
     }
 
+    /**
+     * The rows that decide whether {@code targetId} can be undone (UndoRules): its
+     * corrections, its repayments (only a loan has any), and the corrections of those
+     * repayments. Any status, so the caller sees pending and declined rows too.
+     *
+     * Read after locking the target when submitting a correction. A repayment of a loan
+     * is approved under the same lock (INT-5), so this sees one that was approved while
+     * the request was waiting.
+     */
+    public List<LedgerTransaction> relatedTo(UUID targetId) {
+        return jdbc.sql("SELECT " + COLUMNS + " FROM transaction"
+                        + " WHERE corrects_transaction_id = :target"
+                        + "    OR settles_transaction_id = :target"
+                        + "    OR corrects_transaction_id IN (SELECT transaction_id FROM transaction"
+                        + "                                    WHERE settles_transaction_id = :target)"
+                        + " ORDER BY created_at, transaction_id")
+                .param("target", targetId)
+                .query(TransactionRepository::mapRow).list();
+    }
+
     // ---- MB-12: approving a correction ----------------------------------------------------
 
     /**
