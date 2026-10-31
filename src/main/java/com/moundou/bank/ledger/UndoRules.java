@@ -44,9 +44,9 @@ public final class UndoRules {
                         && tx.status() == TransactionStatus.APPROVED).findFirst();
 
         if (target.kind() == TransactionKind.COMPENSATING)
-            return new Check.Refused("TBD");
+            return new Check.Refused("ledger.history.undo.isCorrection");
         if (target.status() != TransactionStatus.APPROVED)
-            return new Check.Refused("TBD");
+            return new Check.Refused("ledger.history.undo.notApproved");
         if (approvedRepayment.isPresent()) {
             UUID repaymentId = approvedRepayment.get().id();
 
@@ -56,7 +56,7 @@ public final class UndoRules {
                             && Objects.equals(tx.settlesTransactionId(), repaymentId));
 
             if (isFound)
-                return new Check.Refused("TBD");
+                return new Check.Refused("ledger.history.correction.conflictsWithRepayment");
         }
 
         return new Check.Undoable();
