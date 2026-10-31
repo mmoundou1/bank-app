@@ -13,38 +13,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
-/*
-
-    - Display target details page (lent/borrowed; transaction amount; fixed amount; explanation message; “Ama confirms it first”;
-    counterparty’s name; transaction type; transaction date; optional note)
-    - Take in user input (target id, note, and submission key)
-    - Check that the user is active
-        - If user is inactive, throw NotPermittedException; otherwise, move to next step
-    - Find the target
-        - If target does not exist or the signed member isn’t creditor or debtor, throw NotPermittedException; otherwise, proceed to next step
-    - Check that the target transaction is not a correction
-        - If target transaction = CORRECTION, return Refused; otherwise, proceed to next step.
-    - Lock target transaction
-    - Check that the signed in member hasn’t already raised a correction against the target transaction
-        - If this member already sent it, return Recorded with alreadyRecorded = true; otherwise, proceed to next step
-    - Check that the target transaction is approved
-        - If not Approved, return Refused; otherwise, proceed to next step.
-    - Check that there’s no approved compensating entry against the target transaction
-        - If there’s an approved compensating entry against the target transaction, return Refused
-    - If target transaction is a loan, check that there's no approved repayment on it with a compensating entry being raised against it.
-        - If the target is a loan, and it’s Settled, return Refused with the Ledger.History-11 message key; otherwise, proceed to next step.
-    - Raise a compensating entry
-        - Create new NewTransaction object with values for: transactionId, transaction kind (COMPENSATING),
-        creditor (the debtor becomes the creditor), debtor (creditor becomes debtor), amount (copied from target),
-        currency (copied from target), transactionDate (set to the transaction’s initiator’s date*), optional note, initiatorId,
-        settlesTransactionId (set to null), correctsTransactionId (the original transaction’s id), openingBalance = false, submissionKey.
-        - Add NewTransaction object to TransactionRepository
-        - Create new recordHistory repository entry for the compensation transaction
-    - Write PENDING_ALERT notification row to Outbox to target’s other party.
-    - Return Recorded
-
- */
-
 @Service
 public class CompensationService {
 
@@ -97,22 +65,16 @@ public class CompensationService {
     public Outcome compensation(UUID actorId, UUID targetId, String note, UUID submissionKey) {
         Objects.requireNonNull(submissionKey, "submissionKey");
 
-        checkClient(actorId, targetId);          // yours, kept: active, the record exists, a party to it
-        Member actor = activeMember(actorId);    // for their time zone (CON-8)
+        checkClient(actorId, targetId);
+        Member actor = activeMember(actorId);
 
-        // CHANGED: every check below reads the row returned by the lock. The row read
-        // before it can be out of date by the time the lock is granted (the MB-13 bug).
         LedgerTransaction locked = transactions.lockForUpdate(targetId)
                 .orElseThrow(() -> new NotPermittedException(actorId, "view transaction " + targetId));
 
-        // CHANGED: looked up by THIS form's key. item.submissionKey() was the target's
-        // own key, from when the target was recorded, so a retry was never recognised.
         Optional<LedgerTransaction> earlier = transactions.findBySubmissionKey(actorId, submissionKey);
         if (earlier.isPresent())
             return new Outcome.Recorded(earlier.get(), true);
 
-        // CHANGED: your four state checks are UndoRules.check, so call it instead of
-        // repeating it. One rule, so the history's link and this submit cannot disagree.
         if (UndoRules.check(locked, transactions.relatedTo(locked.id())) instanceof UndoRules.Check.Refused refused)
             return new Outcome.Rejected(refused.messageKey());
 
@@ -123,28 +85,22 @@ public class CompensationService {
                                                             locked.amountMinor(),
                                                             locked.currency(),
                                                             LocalDate.now(clock.withZone(actor.timeZone())),
-                                                            note == null || note.isBlank() ? null : note.strip(),  // CHANGED: as EntryService
+                                                            note == null || note.isBlank() ? null : note.strip(),
                                                             actorId,
                                                             null,
                                                             locked.id(),
                                                             false,
-                                                            submissionKey);                // CHANGED: the form's key
+                                                            submissionKey);
 
-        // CHANGED: insertIfNew, as RepaymentService. If the same key still slipped in,
-        // the earlier row is the answer, not a crash on the unique index.
         if (!transactions.insertIfNew(newTransaction))
             return new Outcome.Recorded(transactions.findBySubmissionKey(actorId, submissionKey).orElseThrow(), true);
 
-        // CHANGED: the history row belongs to the NEW transaction, which starts life
-        // pending (from nothing). Yours recorded the target moving APPROVED -> PENDING,
-        // which never happened: the target is never changed (Ledger.History-5).
         transactions.recordHistory(newTransaction.id(), null, TransactionStatus.PENDING, actorId);
 
         UUID counterparty = newTransaction.initiatedBy().equals(newTransaction.creditor()) ?
                 newTransaction.debtor() : newTransaction.creditor();                          // yours, kept
         outbox.enqueue(newTransaction.id(), counterparty, OutboxWriter.AlertKind.PENDING_ALERT);
 
-        // CHANGED: return the new correction, not the target.
         return new Outcome.Recorded(transactions.findById(newTransaction.id()).orElseThrow(), false);
     }
 
@@ -162,7 +118,6 @@ public class CompensationService {
 
     }
 
-    /** CHANGED: your active-member lookup, moved here so both methods share it. */
     private Member activeMember(UUID actorId) {
         return members.findById(actorId)
                 .filter(Member::active)

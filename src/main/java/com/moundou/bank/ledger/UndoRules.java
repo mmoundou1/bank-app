@@ -36,24 +36,17 @@ public final class UndoRules {
      *                ignored, so the history can pass its whole list.
      */
     public static Check check(LedgerTransaction target, List<LedgerTransaction> related) {
-        // Question 1 (yours). CHANGED: the real message key instead of "TBD".
+
         if (target.kind() == TransactionKind.COMPENSATING)
             return new Check.Refused("ledger.history.undo.isCorrection");
 
-        // Question 2 (yours). CHANGED: the real message key instead of "TBD".
+
         if (target.status() != TransactionStatus.APPROVED)
             return new Check.Refused("ledger.history.undo.notApproved");
 
-        // Question 3. ADDED: it was missing. Is the target itself already undone?
         if (isUndone(target, related))
             return new Check.Refused("ledger.history.correction.alreadyCorrected");
 
-        // Question 4. CHANGED, three ways:
-        //  - only a loan can be settled, so only a loan is asked;
-        //  - only repayments of THIS loan count (settlesTransactionId points at it);
-        //  - EVERY such repayment is looked at, not only the first, and the loan is
-        //    refused when one of them is approved and NOT undone. Yours refused when
-        //    the repayment WAS undone, the opposite.
         if (target.kind() == TransactionKind.LOAN) {
             boolean settled = related.stream()
                     .anyMatch(tx -> tx.kind() == TransactionKind.REPAYMENT
