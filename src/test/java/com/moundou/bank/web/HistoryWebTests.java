@@ -21,6 +21,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Currency;
 import java.util.List;
+import java.util.UUID;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.Mockito.verify;
@@ -52,7 +53,7 @@ class HistoryWebTests {
 
     final List<HistoryEntry> entries = List.of(new HistoryEntry(HistoryDirection.YOU_BORROWED, "Ama", false,
             2000, Currency.getInstance("USD"), LocalDate.of(2026, 10, 3), null, TransactionStatus.PENDING,
-            null, null, false, null, null));
+            null, null, false, null, null, UUID.randomUUID(), HistoryEntry.UndoLink.NONE));
 
     @BeforeEach
     void bensHistory() {

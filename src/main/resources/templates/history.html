@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.language}">
-<!--/* The signed-in member's history (MB-14; Ledger.History-1 to -7). Read-only: no row
-  has an edit, delete or correct control (Ledger.History-4). The correct control arrives
-  with journey 2, the compensating entry.
+<!--/* The signed-in member's history (MB-14; Ledger.History-1 to -7). No row can be
+  edited or deleted (Ledger.History-4). A record is undone by a new correction instead
+  (Ledger.History-5): the "Undo this record" link, shown when e.undo() is SHOW.
 
   Model:
     entries   List<HistoryEntry>  HistoryService.historyFor(me), already newest first
     timeZone  ZoneId              the viewer's zone, for decision timestamps (CR-2)
+  Flash, after undoing: messageKey + messageArgs, or errorKey (layout :: flash).
 
   Each card is one sentence from the viewer's side, picked by the service as a
   HistoryDirection and worded here (history.direction.*), so the words stay in
@@ -20,6 +21,7 @@
 <body>
 <nav th:replace="~{layout :: nav}"></nav>
 <main>
+  <div th:replace="~{layout :: flash}"></div>
   <h1 th:text="#{history.title}">Your history</h1>
 
   <p th:if="${entries.isEmpty()}" class="muted" th:text="#{history.none}">No transactions yet.</p>
@@ -60,6 +62,12 @@
         <span th:if="${e.declineReason() != null}" class="hint"
               th:text="#{history.declineReason(${e.declineReason()})}">Reason: not mine</span>
       </span>
+
+      <!-- Undoing it (journey 2). HistoryService decides; this only shows the answer. -->
+      <a th:if="${'' + e.undo() == 'SHOW'}" th:href="@{/history/{id}/undo(id=${e.id()})}"
+         th:text="#{history.undo.link}">Undo this record</a>
+      <span th:if="${'' + e.undo() == 'REPAYMENT_FIRST'}" class="hint"
+            th:text="#{history.undo.repaymentFirst}">To undo this loan, first undo its repayment.</span>
     </li>
   </ul>
 </main>

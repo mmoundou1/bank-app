@@ -21,6 +21,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Currency;
 import java.util.List;
+import java.util.UUID;
 
 import static com.moundou.bank.ledger.HistoryDirection.CORRECTION;
 import static com.moundou.bank.ledger.HistoryDirection.YOU_BORROWED;
@@ -52,7 +53,7 @@ class HistoryTemplatesTests {
     static HistoryEntry entry(HistoryDirection direction, boolean recordedByYou, String note,
                               TransactionStatus status, String declineReason, Instant decidedAt) {
         return new HistoryEntry(direction, "Ama", recordedByYou, 2000, USD, LocalDate.of(2026, 10, 3),
-                note, status, declineReason, decidedAt, false, null, null);
+                note, status, declineReason, decidedAt, false, null, null, UUID.randomUUID(), HistoryEntry.UndoLink.NONE);
     }
 
     @Controller
@@ -97,7 +98,7 @@ class HistoryTemplatesTests {
     @Test
     void aCorrectionQuotesTheSentenceOfWhatItUndoes() throws Exception {
         HistoryEntry correction = new HistoryEntry(CORRECTION, "Ama", false, 2000, USD, LocalDate.of(2026, 10, 10),
-                null, TransactionStatus.PENDING, null, null, false, YOU_BORROWED, LocalDate.of(2026, 9, 3));
+                null, TransactionStatus.PENDING, null, null, false, YOU_BORROWED, LocalDate.of(2026, 9, 3), UUID.randomUUID(), HistoryEntry.UndoLink.NONE);
 
         String page = render(correction);
         assertThat(page)
@@ -130,7 +131,7 @@ class HistoryTemplatesTests {
     @Test
     void whoRecordedItTheNoteAndAnOpeningBalanceAreShown() throws Exception {  // T-Hist-6a
         HistoryEntry opening = new HistoryEntry(YOU_BORROWED, "Ama", false, 150_000, XAF, LocalDate.of(2019, 6, 1),
-                "School fees", TransactionStatus.APPROVED, null, DECIDED, true, null, null);
+                "School fees", TransactionStatus.APPROVED, null, DECIDED, true, null, null, UUID.randomUUID(), HistoryEntry.UndoLink.NONE);
 
         String page = render(opening, entry(YOU_LENT, true, null, TransactionStatus.PENDING, null, null));
         assertThat(page)
@@ -145,7 +146,7 @@ class HistoryTemplatesTests {
     }
 
     @Test
-    void noRowHasAnyControl() throws Exception {                               // T-Hist-4a
+    void noRowHasAnEditOrDeleteControl() throws Exception {                    // T-Hist-4a
         String page = render(
                 entry(YOU_LENT, true, null, TransactionStatus.PENDING, null, null),
                 entry(YOU_BORROWED, false, null, TransactionStatus.APPROVED, null, DECIDED),
@@ -162,5 +163,34 @@ class HistoryTemplatesTests {
     @Test
     void withNoTransactionsThePageSaysSo() throws Exception {
         assertThat(render()).contains("No transactions yet.");
+    }
+
+    // ---- the undo link (MB-14 journey 2) -----------------------------------------------
+
+    static HistoryEntry withUndo(HistoryEntry.UndoLink undo, UUID id) {
+        return new HistoryEntry(YOU_BORROWED, "Ama", false, 2000, USD, LocalDate.of(2026, 9, 3), null,
+                TransactionStatus.APPROVED, null, DECIDED, false, null, null, id, undo);
+    }
+
+    @Test
+    void anUndoableRecordLinksToItsUndoScreen() throws Exception {
+        UUID id = UUID.randomUUID();
+        assertThat(render(withUndo(HistoryEntry.UndoLink.SHOW, id)))
+                .contains("href=\"/history/" + id + "/undo\"", "Undo this record");
+    }
+
+    @Test
+    void aRepaidLoanSaysToUndoTheRepaymentFirstInsteadOfALink() throws Exception {   // decision 1
+        UUID id = UUID.randomUUID();
+        assertThat(render(withUndo(HistoryEntry.UndoLink.REPAYMENT_FIRST, id)))
+                .contains("To undo this loan, first undo its repayment.")
+                .doesNotContain("/history/" + id + "/undo");
+    }
+
+    @Test
+    void otherRecordsOfferNothing() throws Exception {
+        UUID id = UUID.randomUUID();
+        assertThat(render(withUndo(HistoryEntry.UndoLink.NONE, id)))
+                .doesNotContain("Undo this record", "first undo its repayment", "/history/" + id + "/undo");
     }
 }
