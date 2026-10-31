@@ -10,8 +10,8 @@ public enum HistoryDirection {
     CORRECTION;
 
     /**
-     * Which sentence {@code row} is for {@code viewerId}. Yours, moved here from
-     * HistoryService so the history and the undo screen share one copy. Creditor and
+     * Which sentence {@code row} is for {@code viewerId}, shared by the history and the
+     * undo screen. Creditor and
      * debtor are this row's own effect (D2), so on a repayment the creditor is the
      * borrower: the one who paid.
      */

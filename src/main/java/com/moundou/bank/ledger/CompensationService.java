@@ -24,7 +24,7 @@ public class CompensationService {
     }
 
     /**
-     * ADDED. What the confirm screen needs: the record, and whether it can be undone
+     * What the confirm screen needs: the record, and whether it can be undone
      * (the same UndoRules answer the history and the submit use).
      */
     public record UndoTarget(LedgerTransaction target, UndoRules.Check check) {
@@ -44,9 +44,8 @@ public class CompensationService {
     }
 
     /**
-     * CHANGED. Returns the record with its UndoRules answer, so the screen can send the
-     * member back when it cannot be undone. Optional.of(...) could never be empty,
-     * because checkClient throws instead, so the Optional is gone.
+     * The record with its UndoRules answer, so the screen can send the member back when
+     * it cannot be undone. Throws NotPermittedException as the submit does.
      */
     @Transactional(readOnly = true)
     public UndoTarget targetDetails(UUID actorId, UUID targetId) {
@@ -57,9 +56,9 @@ public class CompensationService {
     /**
      * Raises a compensating entry against {@code targetId} (Ledger.History-5, -8 to -11).
      *
-     * CHANGED: @Transactional, without which the lock is released the moment it is
-     * taken and the five writes below are not all-or-nothing. CHANGED: the submission
-     * key is the form's, passed in, not the target's.
+     * One database transaction: the lock on the target lasts until the end, and the
+     * correction, its history row and its alert are saved together or not at all. The
+     * submission key is the form's, so a retried POST is recognised.
      */
     @Transactional
     public Outcome compensation(UUID actorId, UUID targetId, String note, UUID submissionKey) {
@@ -98,7 +97,7 @@ public class CompensationService {
         transactions.recordHistory(newTransaction.id(), null, TransactionStatus.PENDING, actorId);
 
         UUID counterparty = newTransaction.initiatedBy().equals(newTransaction.creditor()) ?
-                newTransaction.debtor() : newTransaction.creditor();                          // yours, kept
+                newTransaction.debtor() : newTransaction.creditor();
         outbox.enqueue(newTransaction.id(), counterparty, OutboxWriter.AlertKind.PENDING_ALERT);
 
         return new Outcome.Recorded(transactions.findById(newTransaction.id()).orElseThrow(), false);

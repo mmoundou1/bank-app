@@ -61,7 +61,7 @@ public final class UndoRules {
     }
 
     /**
-     * ADDED. Whether an approved correction points at {@code row}. Used for the target
+     * Whether an approved correction points at {@code row}. Used for the target
      * (question 3) and for each of a loan's repayments (question 4): one rule, two rows.
      * A correction points with correctsTransactionId; settlesTransactionId is only ever
      * set on a repayment.

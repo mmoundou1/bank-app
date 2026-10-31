@@ -23,18 +23,9 @@ import java.util.UUID;
  * Undoing a record (MB-14 journey 2; Ledger.History-5, -8 to -11). The confirm screen
  * at GET /history/{id}/undo, and its POST. Both end back on the history.
  *
- * CHANGED from your version:
- *  - @Controller, not @RestController. A @RestController writes the returned String
- *    into the response as text; a @Controller treats it as a template name, or as
- *    "redirect:/path".
- *  - The id is in the path, "/history/{targetId}/undo", so @PathVariable has
- *    something to bind; "/undo-repayment" had no {targetId} in it.
- *  - The form fields arrive as @RequestParam. @RequestBody reads the raw request body,
- *    which for an HTML form is "note=...&submissionKey=...", not the note.
- *  - After a POST the browser is always redirected (Post/Redirect/Get), and anything
- *    to show after the redirect goes in RedirectAttributes as a flash attribute. A
- *    Model attribute is lost when the browser makes its new request.
- *  - Model attribute names are identifiers, so no spaces.
+ * After the POST the browser is always redirected to the history (Post/Redirect/Get),
+ * so a refresh cannot send the form again. What to show there travels as a flash
+ * attribute, which survives exactly one redirect; a Model attribute would not.
  */
 @Controller
 public class CompensationController {
