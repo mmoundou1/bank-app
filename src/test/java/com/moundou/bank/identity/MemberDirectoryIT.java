@@ -63,4 +63,14 @@ class MemberDirectoryIT {
         UUID me = fixtures.member("Matthieu");
         assertThat(directory.counterpartiesFor(me)).isEmpty();
     }
+
+    @Test
+    void findsTheAddressAnAlertIsEmailedTo() {          // ADR-010, for the outbox (MB-18)
+        UUID ama = fixtures.member("Ama");
+        fixtures.member("Ben");
+        jdbc.sql("UPDATE member SET email = 'ama@example.com' WHERE member_id = :id").param("id", ama).update();
+
+        assertThat(directory.emailOf(ama)).contains("ama@example.com");
+        assertThat(directory.emailOf(UUID.randomUUID())).isEmpty();
+    }
 }

@@ -21,4 +21,6 @@ interface AlertEmails {
      * @param transaction its transaction, as read when the alert is handled
      */
     EmailMessage compose(ClaimedAlert alert, LedgerTransaction transaction);
+
 }
+

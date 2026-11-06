@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.language}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${subject}">Ben approved your record</title>
+</head>
+<body style="margin:0; padding:1rem; background:#ffffff; color:#1a1a1a; font-family:Arial, Helvetica, sans-serif; font-size:1rem; line-height:1.5;">
+<!--/* Settlement alert, to the initiator: their item was approved or declined
+  (Notify.Settlement-1, -2; MB-19). Composed by ThymeleafAlertEmails at send time.
+
+  Model, all text already formatted:
+    subject        String  the email's subject
+    recipientName  String  who it is for: the initiator
+    otherName      String  who decided: the counterparty
+    kind, side     String  pick the same item.sent.* sentence the app shows the initiator
+    amount, date   String  formatted in the recipient's locale
+    outcome        String  approved or declined
+    reason         String  optional, the decline reason (Notify.Settlement-2)
+    link           String  the item itself: <base URL>/pending/{id}
+*/-->
+<div style="max-width:36rem;">
+  <p th:replace="~{email/parts :: greeting(${recipientName})}">Hi Ama,</p>
+  <p style="margin:0 0 0.5rem; font-size:1.125rem;">
+    <strong th:text="#{${'item.sent.' + kind + '.' + side}(${otherName}, ${amount})}">You lent Ben $20.00</strong>
+  </p>
+  <p style="margin:0 0 0.5rem;" th:text="#{email.date(${date})}">Date: Sep 1, 2026</p>
+  <p style="margin:1rem 0 0;" th:if="${outcome == 'approved'}"
+     th:text="#{email.settlement.approved(${otherName})}">Ben approved it. It now counts in your balances.</p>
+  <p style="margin:1rem 0 0;" th:if="${outcome == 'declined'}"
+     th:text="#{email.settlement.declined(${otherName})}">Ben declined it. Nothing changes in your balances.</p>
+  <p style="margin:0.5rem 0 0;" th:if="${outcome == 'declined' and reason != null}"
+     th:text="#{email.settlement.reason(${reason})}">Their reason: not mine</p>
+  <p th:replace="~{email/parts :: action(${link}, #{email.settlement.action})}">Open the record</p>
+  <p th:replace="~{email/parts :: footer}">Footer</p>
+</div>
+</body>
+</html>

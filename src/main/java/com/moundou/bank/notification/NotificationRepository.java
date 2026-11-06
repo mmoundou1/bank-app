@@ -134,4 +134,6 @@ class NotificationRepository {
     private static OffsetDateTime utc(Instant instant) {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
+
 }
+
