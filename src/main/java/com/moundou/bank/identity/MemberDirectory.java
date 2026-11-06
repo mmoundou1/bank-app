@@ -37,6 +37,17 @@ public class MemberDirectory {
     }
 
     /**
+     * The address alerts are emailed to (ADR-010). Kept out of {@link Member} on purpose,
+     * so an address cannot end up on a screen by accident: only the outbox asks for it.
+     */
+    public Optional<String> emailOf(UUID id) {
+        return jdbc.sql("SELECT email FROM member WHERE member_id = :id")
+                .param("id", id)
+                .query(String.class)
+                .optional();
+    }
+
+    /**
      * Who {@code memberId} can choose as the other party on a new entry: every active
      * member except themselves, in name order (Ledger.Entry-1, -3; Auth.Roles-4).
      *

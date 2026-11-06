@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.language}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${subject}">Ama needs you to approve a record</title>
+</head>
+<body style="margin:0; padding:1rem; background:#ffffff; color:#1a1a1a; font-family:Arial, Helvetica, sans-serif; font-size:1rem; line-height:1.5;">
+<!--/* Pending alert, to the counterparty: something waits for their approval
+  (Notify.Pending-1, -2; MB-18). Composed by ThymeleafAlertEmails at send time.
+
+  Model, all text already formatted:
+    subject        String  the email's subject
+    recipientName  String  who it is for
+    otherName      String  who sent the item
+    kind, side     String  the item's kind (loan, repayment, compensating) and the
+                           recipient's side of it (creditor, debtor), which pick the same
+                           item.toDecide.* sentence the queue shows
+    amount, date   String  formatted in the recipient's locale
+    note           String  optional, what the sender wrote
+    link           String  the item itself: <base URL>/pending/{id}
+*/-->
+<div style="max-width:36rem;">
+  <p th:replace="~{email/parts :: greeting(${recipientName})}">Hi Ben,</p>
+  <p style="margin:0 0 0.5rem; font-size:1.125rem;">
+    <strong th:text="#{${'item.toDecide.' + kind + '.' + side}(${otherName}, ${amount})}">Ama says they lent you $20.00</strong>
+  </p>
+  <p style="margin:0 0 0.5rem;" th:text="#{email.date(${date})}">Date: Sep 1, 2026</p>
+  <p style="margin:0 0 0.5rem;" th:if="${note != null}" th:text="#{email.note(${note})}">Note: dinner</p>
+  <p style="margin:1rem 0 0;" th:text="#{email.pending.lead}">Nothing changes in your balances until you approve it.</p>
+  <p th:replace="~{email/parts :: action(${link}, #{email.pending.action})}">Approve or decline it</p>
+  <p th:replace="~{email/parts :: footer}">Footer</p>
+</div>
+</body>
+</html>
