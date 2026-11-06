@@ -87,7 +87,7 @@ All code is under `src/main/java/com/moundou/bank/`.
 |---|---|---|
 | `identity` | Who someone is and what they may do: Google sign-in, members, roles, the allow-list, administration, profiles | `SignInService`, `AdminService` |
 | `ledger` | The money records: entering transactions, and later approving, repaying, correcting and history | `EntryService`, `TransactionRepository` |
-| `notification` | Queuing email alerts in the same database transaction as the ledger change (the "outbox") | `OutboxWriter` |
+| `notification` | Email alerts: queued in the same database transaction as the ledger change (the "outbox"), then sent by a worker every 15 seconds | `OutboxWorker` |
 | `web` | Controllers (one per screen) and `SecurityConfig`. Templates live in `resources/templates` | the controller for the screen |
 | `i18n` | Turning amounts and dates into text | `Formats` |
 | `health` | The `/healthz` keep-alive endpoint | `HealthController` |
@@ -132,6 +132,28 @@ All code is under `src/main/java/com/moundou/bank/`.
 | `AuditService` | The administrator's view of two members' dealings. It lives here because it reads ledger data; TD §2 lists it under `identity`. |
 | `LedgerConfig`, `LedgerProperties` | Wiring: the clock and the onboarding end date. |
 
+### `notification`
+
+Services write an alert row in the same database transaction as the ledger change (the
+outbox). A worker sends them afterwards, so a slow or broken email provider can never
+slow down or fail a member's click (ADR-010, TD §7).
+
+| Class | What it does |
+|---|---|
+| `OutboxWriter`, `JdbcOutboxWriter` | What the services call to queue an alert: `enqueue(transaction, recipient, kind)`. |
+| `OutboxWorker` | One visit, `runOnce()`: claim up to 20 due alerts, then for each one read its transaction, decide, compose, send, and record the outcome. Any failure for one alert is a failed try for that alert only, and is logged. *(You wrote this one.)* |
+| `AlertRules` | Send or skip: a pending alert whose item is no longer pending is skipped (CR-18). Pure code. *(You wrote this one.)* |
+| `RetryPolicy` | After a failed send: try again after 1 min, 5 min, 30 min, 2 h, then give up (five sends in all, decided in MB-18). Pure code. *(You wrote this one.)* |
+| `NotificationRepository` | All SQL on `notification`. `claimDue` claims and reserves due alerts for 10 minutes in one statement (`FOR UPDATE SKIP LOCKED`); `markSent`, `markSkipped`, `retryAt`, `markFailed` record the outcome. Each method commits on its own, so no transaction is open while an email is sent. |
+| `AlertEmails`, `ThymeleafAlertEmails` | Write the email for one alert from `templates/email`, at send time, in the recipient's words: the same `item.toDecide.*` / `item.sent.*` sentence the app shows them, and one link to `/pending/{id}`. |
+| `EmailGateway`, `EmailMessage` | Sending one email, behind an interface so the worker never knows the provider. *(You wrote these.)* |
+| `BrevoEmailGateway` | The real gateway: Brevo's HTTPS API (Render's free tier blocks SMTP), 10-second timeout. |
+| `OutboxSchedule` | Runs the worker every 15 seconds, only when `bank.notification.worker-enabled` is on (off in tests). |
+| `NotificationConfig`, `NotificationProperties` | Wiring and settings: base URL for links, Brevo key and sender, the on/off switch. |
+
+The reasoning behind the claim, the reservation and "possibly twice, never lost" is in
+the Javadoc of `NotificationRepository.claimDue` and `BrevoEmailGateway`.
+
 ### `web`
 
 | Class | Routes | Template |
@@ -157,7 +179,7 @@ them in with `th:replace="~{layout :: head('title.key')}"` and `~{layout :: nav}
 |---|---|
 | `resources/db/migration/` | The database schema. `V1` holds the ledger tables and balance views; `V2` holds the session tables. **Never edit a merged file.** A change is always a new file, `V3__...sql`. |
 | `resources/messages.properties` | Every word a member sees, grouped by screen. Templates use `#{key}`. |
-| `resources/templates/` | One Thymeleaf page per screen, plus `layout.html`. |
+| `resources/templates/` | One Thymeleaf page per screen, plus `layout.html`. `email/` holds the three alert emails and their shared `parts.html`. |
 | `resources/application.yml` | Settings. Secrets come from environment variables, never from this file. |
 
 ---
@@ -216,10 +238,10 @@ Tests sit in `src/test/java` under the same package as the class they test.
 | MB-11 Transaction entry | In progress (screen built; follow-ups in section 7) | `ledger/EntryService`, `EntryValidator`, `Amounts`, `EntryRequest`; `web/EntryController`, `templates/transactions-new.html`; `identity/MemberDirectory.counterpartiesFor` |
 | MB-12 Approval | Done | `TransactionStateMachine` (TD §5), `DualConfirmationService`, `DualConfirmationController`; templates `pending.html`, `queue.html`; queries in `TransactionRepository` (queues, `loanLifecycle`, `hasApprovedCorrection`). Queue, view, decline, cancel (with its alert, CR-18), and approving loans, repayments and corrections. Tested in `DualConfirmationServiceIT`, `DualConfirmationWebTests`, `TransactionStateMachineTests`, `ApprovalQueriesIT`. |
 | MB-13 Repayment | Done (PR #28) | `RepaymentService`, `RepaymentController`; template `repayments-new.html`; query `TransactionRepository.outstandingLoansOwedBy`; `Formats.plainAmount` pre-fills the amount. Approval is MB-12's. Tested in `RepaymentServiceIT`, `RepaymentQueriesIT`, `RepaymentLockIT`, `RepaymentWebTests`, `RepaymentTemplatesTests`. |
-| MB-14 History and corrections | Done (awaiting merge) | History: `HistoryService`, `HistoryEntry`, `HistoryDirection`, `HistoryController`, `history.html`; queries `historyFor`, `MemberDirectory.displayNames`; `Formats.dateTimeIn`. Undoing a record: `UndoRules`, `CompensationService`, `CompensationController`, `undo.html`; query `relatedTo`. Approving a correction is MB-12's, which also refuses a correction of a correction. Tested in `HistoryServiceIT`, `HistoryQueriesIT`, `HistoryWebTests`, `HistoryTemplatesTests`, `UndoRulesTests`, `UndoQueriesIT`, `CompensationServiceIT`, `CompensationWebTests`. |
+| MB-14 History and corrections | Done (PRs #29, #30) | History: `HistoryService`, `HistoryEntry`, `HistoryDirection`, `HistoryController`, `history.html`; queries `historyFor`, `MemberDirectory.displayNames`; `Formats.dateTimeIn`. Undoing a record: `UndoRules`, `CompensationService`, `CompensationController`, `undo.html`; query `relatedTo`. Approving a correction is MB-12's, which also refuses a correction of a correction. Tested in `HistoryServiceIT`, `HistoryQueriesIT`, `HistoryWebTests`, `HistoryTemplatesTests`, `UndoRulesTests`, `UndoQueriesIT`, `CompensationServiceIT`, `CompensationWebTests`. |
 | MB-15, MB-17 Dashboard and counterparties | To do | `ledger` queries over the `member_net` and `pair_net` views (already in `V1`); `home.html` |
-| MB-18, MB-19 Alerts | To do | `notification`: the worker that sends the outbox rows `EntryService` already writes |
-| MB-6 Hosting | Partly done | Render, Neon and Google are live. Still to do: email provider, keep-alive scheduler, switching to Neon's direct endpoint |
+| MB-18, MB-19 Alerts | Done in code (awaiting merge and a live check) | Everything in `notification` above, plus `templates/email/` and `MemberDirectory.emailOf`. Needs `BREVO_API_KEY` and `ALERT_SENDER_EMAIL` on Render. Tested in `AlertRulesTests`, `RetryPolicyTests`, `NotificationRepositoryIT`, `OutboxWorkerIT`, `ThymeleafAlertEmailsTests`, `BrevoEmailGatewayTests`, `OutboxScheduleTests`. |
+| MB-6 Hosting | Partly done | Render, Neon and Google are live. Email provider chosen: Brevo (MB-18). Still to do: keep-alive scheduler, switching to Neon's direct endpoint |
 
 ---
 
@@ -270,3 +292,8 @@ Differences that are known and deliberate:
 - `AuditService` is in `ledger`, not in `identity` (TD §2), because it reads ledger data.
 - The app connects through Neon's pooler endpoint, not the direct endpoint TD §10
   asks for. This is to be fixed under MB-6.
+- Alerts are sent at most five times, with waits of 1 min, 5 min, 30 min and 2 h; TD §7
+  still lists five retries ending with 6 h (decided in MB-18; TD to be updated).
+- Alert emails are HTML, rendered from `templates/email`; the worker reaches member
+  names and addresses through `AlertEmails`, not directly (TD §2: no module reads
+  another's tables).

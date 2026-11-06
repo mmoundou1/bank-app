@@ -73,6 +73,14 @@ bank:
     # sets RENDER_EXTERNAL_URL to the service's onrender.com address; set BASE_URL only
     # for a custom domain. Locally, BASE_URL=http://localhost:8080.
     base-url: ${BASE_URL:${RENDER_EXTERNAL_URL:}}
+    # The outbox worker, every 15 seconds (Technical Design 7). Off in tests.
+    worker-enabled: true
+    # ADR-010, chosen in MB-18. HTTPS only: Render's free tier blocks SMTP ports.
+    brevo:
+      url: https://api.brevo.com
+      api-key: ${BREVO_API_KEY:}               # a secret: Render's environment settings only
+      sender-email: ${ALERT_SENDER_EMAIL:}     # the From address, verified in Brevo
+      timeout: 10s                             # under 10 min reservation / 20 alerts a visit
 
 logging:
   level:

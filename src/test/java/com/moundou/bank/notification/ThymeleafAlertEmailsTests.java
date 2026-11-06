@@ -305,7 +305,7 @@ class ThymeleafAlertEmailsTests {
         engine.setTemplateResolver(resolver);
         engine.setTemplateEngineMessageSource(messages);
 
-        return new ThymeleafAlertEmails(engine, messages, members, new Formats(), new NotificationProperties(baseUrl));
+        return new ThymeleafAlertEmails(engine, messages, members, new Formats(), new NotificationProperties(baseUrl, false, null));
     }
 
     private static UUID other(UUID member) {
