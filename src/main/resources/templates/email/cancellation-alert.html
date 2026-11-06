@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.language}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${subject}">Ama cancelled a record waiting for you</title>
+</head>
+<body style="margin:0; padding:1rem; background:#ffffff; color:#1a1a1a; font-family:Arial, Helvetica, sans-serif; font-size:1rem; line-height:1.5;">
+<!--/* Cancellation alert, to the counterparty: the initiator cancelled an item that was
+  waiting for them. Names the initiator and the item, says balances are unchanged, and
+  links to the item, which shows Cancelled (Notify.Settlement-4, T-NSettle-4a; CR-18).
+  Composed by ThymeleafAlertEmails at send time.
+
+  Model, all text already formatted:
+    subject        String  the email's subject
+    recipientName  String  who it is for: the counterparty
+    otherName      String  who cancelled: the initiator
+    kind, side     String  pick the same item.toDecide.* sentence the queue showed
+    amount, date   String  formatted in the recipient's locale
+    link           String  the item itself: <base URL>/pending/{id}
+*/-->
+<div style="max-width:36rem;">
+  <p th:replace="~{email/parts :: greeting(${recipientName})}">Hi Ben,</p>
+  <p style="margin:0 0 0.5rem; font-size:1.125rem;">
+    <strong th:text="#{${'item.toDecide.' + kind + '.' + side}(${otherName}, ${amount})}">Ama says they lent you $20.00</strong>
+  </p>
+  <p style="margin:0 0 0.5rem;" th:text="#{email.date(${date})}">Date: Sep 1, 2026</p>
+  <p style="margin:1rem 0 0;" th:text="#{email.cancellation.lead(${otherName})}">Ama cancelled it. Your balances are unchanged.</p>
+  <p th:replace="~{email/parts :: action(${link}, #{email.cancellation.action})}">Open the record</p>
+  <p th:replace="~{email/parts :: footer}">Footer</p>
+</div>
+</body>
+</html>

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<body>
+<!--/* Parts shared by the alert emails (MB-18, MB-19), included with th:replace.
+
+  Email clients ignore stylesheets, so every style is inline. Sizes are in rem and nothing
+  has a fixed width or height, so text scales with the reader's settings (USE-4).
+
+  greeting(name)          "Hi Ben,"
+  action(link, label)     the one link in the email, to the item itself (Notify.Pending-2);
+                          label is already resolved by the caller, e.g. #{email.pending.action}
+  footer                  why the member gets these emails
+*/-->
+
+<p th:fragment="greeting(name)" style="margin:0 0 1rem;" th:text="#{email.greeting(${name})}">Hi Ben,</p>
+
+<p th:fragment="action(link, label)" style="margin:1.5rem 0;">
+  <a th:href="${link}" th:text="${label}"
+     style="display:inline-block; padding:0.75rem 1.25rem; border-radius:0.375rem; background:#1f4e8c; color:#ffffff; font-weight:bold; text-decoration:none;">Open it</a>
+</p>
+
+<p th:fragment="footer" style="margin:2rem 0 0; font-size:0.875rem; color:#555555;"
+   th:text="#{email.footer}">You get these emails because you are a member of the family ledger.</p>
+
+</body>
+</html>

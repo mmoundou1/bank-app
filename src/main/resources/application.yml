@@ -68,6 +68,11 @@ bank:
     # Last day, inclusive, on which opening balances are accepted (Ledger.Entry-15, -16),
     # judged in each member's own zone. Format 2026-10-31. Unset closes the window.
     onboarding-ends-on: ${ONBOARDING_ENDS_ON:}
+  notification:
+    # Start of every link in an alert email (Notify.Pending-2, Technical Design 7). Render
+    # sets RENDER_EXTERNAL_URL to the service's onrender.com address; set BASE_URL only
+    # for a custom domain. Locally, BASE_URL=http://localhost:8080.
+    base-url: ${BASE_URL:${RENDER_EXTERNAL_URL:}}
 
 logging:
   level:
