@@ -2,13 +2,15 @@ package com.moundou.bank.notification;
 
 import com.moundou.bank.ledger.LedgerTransaction;
 import com.moundou.bank.ledger.TransactionRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 
 public class OutboxWorker {
 
+    private static final Logger log = LoggerFactory.getLogger(OutboxWorker.class);
     private final NotificationRepository notifications;
     private final TransactionRepository transactions;
     private final AlertEmails emails;
@@ -33,31 +35,15 @@ public class OutboxWorker {
         for(NotificationRepository.ClaimedAlert alert : alerts) {
 
             try {
-
+                
                 LedgerTransaction item = transactions.findById(alert.transactionId()).orElseThrow();
 
                 switch (AlertRules.decide(alert.kind(), item.status())) {
+
                     case AlertRules.Decision.SEND -> {
 
-                        try {
-
-                            gateway.send(emails.compose(alert, item));
-                            notifications.markSent(alert.id(), Instant.now());
-
-
-                        } catch (Exception e) {
-
-                            switch (RetryPolicy.afterFailedAttempt(alert.attempts())) {
-                                case RetryPolicy.Next.RetryAfter retryAfter -> {
-                                    notifications.retryAt(alert.id(),
-                                            Instant.now(clock).plus(retryAfter.delay()), e.getMessage());
-                                }
-                                case RetryPolicy.Next.GiveUp giveUp -> {
-                                    notifications.markFailed(alert.id(), e.getMessage());
-                                }
-                            }
-
-                        }
+                        gateway.send(emails.compose(alert, item));
+                        notifications.markSent(alert.id(), clock.instant());
 
                     }
                     case AlertRules.Decision.SKIP -> {
@@ -66,7 +52,21 @@ public class OutboxWorker {
                 }
 
             }
-            catch (Exception e) {}
+            catch (Exception e) {
+
+                switch (RetryPolicy.afterFailedAttempt(alert.attempts())) {
+                    case RetryPolicy.Next.RetryAfter retryAfter -> {
+                        notifications.retryAt(alert.id(),
+                                clock.instant().plus(retryAfter.delay()), e.getMessage());
+                    }
+                    case RetryPolicy.Next.GiveUp giveUp -> {
+                        notifications.markFailed(alert.id(), e.getMessage());
+                    }
+                }
+
+                log.warn("Alert {} failed on attempt {}: {}", alert.id(), alert.attempts(), e.getMessage());
+
+            }
 
         }
     }
