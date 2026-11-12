@@ -240,8 +240,8 @@ Tests sit in `src/test/java` under the same package as the class they test.
 | MB-13 Repayment | Done (PR #28) | `RepaymentService`, `RepaymentController`; template `repayments-new.html`; query `TransactionRepository.outstandingLoansOwedBy`; `Formats.plainAmount` pre-fills the amount. Approval is MB-12's. Tested in `RepaymentServiceIT`, `RepaymentQueriesIT`, `RepaymentLockIT`, `RepaymentWebTests`, `RepaymentTemplatesTests`. |
 | MB-14 History and corrections | Done (PRs #29, #30) | History: `HistoryService`, `HistoryEntry`, `HistoryDirection`, `HistoryController`, `history.html`; queries `historyFor`, `MemberDirectory.displayNames`; `Formats.dateTimeIn`. Undoing a record: `UndoRules`, `CompensationService`, `CompensationController`, `undo.html`; query `relatedTo`. Approving a correction is MB-12's, which also refuses a correction of a correction. Tested in `HistoryServiceIT`, `HistoryQueriesIT`, `HistoryWebTests`, `HistoryTemplatesTests`, `UndoRulesTests`, `UndoQueriesIT`, `CompensationServiceIT`, `CompensationWebTests`. |
 | MB-15, MB-17 Dashboard and counterparties | To do | `ledger` queries over the `member_net` and `pair_net` views (already in `V1`); `home.html` |
-| MB-18, MB-19 Alerts | Done in code (awaiting merge and a live check) | Everything in `notification` above, plus `templates/email/` and `MemberDirectory.emailOf`. Needs `BREVO_API_KEY` and `ALERT_SENDER_EMAIL` on Render. Tested in `AlertRulesTests`, `RetryPolicyTests`, `NotificationRepositoryIT`, `OutboxWorkerIT`, `ThymeleafAlertEmailsTests`, `BrevoEmailGatewayTests`, `OutboxScheduleTests`. |
-| MB-6 Hosting | Partly done | Render, Neon and Google are live. Email provider chosen: Brevo (MB-18). Still to do: keep-alive scheduler, switching to Neon's direct endpoint |
+| MB-18, MB-19 Alerts | Done (PR #31; checked live 2026-11-12) | Everything in `notification` above, plus `templates/email/` and `MemberDirectory.emailOf`. Configured on Render with `BREVO_API_KEY` (an API key, `xkeysib-…`, restricted to transactional email) and `ALERT_SENDER_EMAIL`. Design: TD §7. Tested in `AlertRulesTests`, `RetryPolicyTests`, `NotificationRepositoryIT`, `OutboxWorkerIT`, `ThymeleafAlertEmailsTests`, `BrevoEmailGatewayTests`, `OutboxScheduleTests`. |
+| MB-6 Hosting | Partly done | Render, Neon and Google are live. Email provider chosen: Brevo (MB-18). Still to do: keep-alive scheduler (until then, alert retries wait while the free instance sleeps; TD §7), switching to Neon's direct endpoint |
 
 ---
 
@@ -292,8 +292,3 @@ Differences that are known and deliberate:
 - `AuditService` is in `ledger`, not in `identity` (TD §2), because it reads ledger data.
 - The app connects through Neon's pooler endpoint, not the direct endpoint TD §10
   asks for. This is to be fixed under MB-6.
-- Alerts are sent at most five times, with waits of 1 min, 5 min, 30 min and 2 h; TD §7
-  still lists five retries ending with 6 h (decided in MB-18; TD to be updated).
-- Alert emails are HTML, rendered from `templates/email`; the worker reaches member
-  names and addresses through `AlertEmails`, not directly (TD §2: no module reads
-  another's tables).
