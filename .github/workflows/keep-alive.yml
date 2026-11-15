@@ -1,0 +1,41 @@
+name: Keep-alive
+
+# ADR-011 (MB-6): Render spins down a free web service after 15 minutes with no
+# inbound request, and a sleeping app sends no alerts, so their retries wait
+# (Technical Design 7). This pings /healthz every 10 minutes: a 5-minute margin,
+# because GitHub runs scheduled workflows on a best-effort basis and may start
+# them late.
+#
+# Scheduled workflows run only from the default branch, so nothing pings until
+# this is merged. Merge it only together with the worker change that lets Neon
+# sleep (MB-6): kept awake around the clock, a worker that queries every
+# 15 seconds would use about 180 CU-hours a month, against the free plan's 100.
+#
+# GitHub disables scheduled workflows in a public repository after 60 days with
+# no activity in it. If pings stop, re-enable this workflow in the Actions tab.
+#
+# Needs one repository variable (Settings > Secrets and variables > Actions >
+# Variables): APP_URL, the app's address, for example https://bank-app.onrender.com
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:        # "Run workflow" in the Actions tab, to try it by hand
+
+permissions: {}             # reads nothing from the repository
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping /healthz
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+        run: |
+          if [ -z "$APP_URL" ]; then
+            echo "::error::Set the APP_URL repository variable to the app's address."
+            exit 1
+          fi
+          # A sleeping instance takes about a minute to wake, so allow 90 seconds.
+          curl --fail --silent --show-error --max-time 90 --retry 2 --retry-delay 10 "$APP_URL/healthz"
