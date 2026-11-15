@@ -427,6 +427,129 @@ public class TransactionRepository {
                 .single();
     }
 
+    // ---- MB-15, MB-17: Home and People (Technical Design 14.3, Model 6) -----------------
+
+    /** One currency of a member's net position: positive means the member is owed. */
+    public record NetPosition(Currency currency, long netMinor) { }
+
+    /** An Outstanding loan, and whether a repayment of it is waiting for a decision. */
+    public record OutstandingLoan(LedgerTransaction loan, boolean repaymentPending) { }
+
+    /**
+     * The balance between a member and one other member in one currency, from the
+     * member's side: positive means {@code other} owes the member.
+     */
+    public record PairNet(UUID other, Currency currency, long netMinor) { }
+
+    /**
+     * {@code memberId}'s net position in each currency (Dashboard.Net-1, -2; Model 6
+     * RT-1): the member_net view, approved rows only. A currency appears exactly when the
+     * member has at least one approved transaction in it, including one now at zero, so
+     * a member with none gets an empty list (Model 6 Q1, Q2). Ordered by currency code
+     * only so the result is the same on every load; the screen's order is the caller's.
+     */
+    public List<NetPosition> netPositions(UUID memberId) {
+        return jdbc.sql("""
+                SELECT currency, net_minor FROM member_net
+                 WHERE member_id = :me
+                 ORDER BY currency""")
+                .param("me", memberId)
+                .query((rs, rowNum) -> new NetPosition(
+                        Currency.getInstance(rs.getString("currency").strip()),
+                        rs.getLong("net_minor")))
+                .list();
+    }
+
+    /**
+     * {@code memberId}'s active loans (Dashboard.Net-3 as defined in SRS 1.16; Model 6
+     * RT-2): approved loans they made or received that are Outstanding. Oldest first.
+     *
+     * Outstanding means the same as {@link #loanLifecycle}: not reversed by an approved
+     * correction, and not settled by an approved repayment that has no approved
+     * correction of its own. That definition is written out twice, here for many loans
+     * at once and there for one, so DashboardQueriesIT checks that the two agree on
+     * every loan it builds.
+     *
+     * Unlike {@link #outstandingLoansOwedBy}, a loan with a pending repayment is still
+     * listed, because it is still Outstanding; {@code repaymentPending} says so, and the
+     * screen then offers no Repay link (Model 6 Q9, Ledger.Repayment-8).
+     *
+     * Filtered by the member here, not by the caller (SEC-2).
+     */
+    public List<OutstandingLoan> outstandingLoansOf(UUID memberId) {
+        return jdbc.sql("SELECT " + COLUMNS + ","
+                        + "       EXISTS (SELECT 1 FROM transaction p"
+                        + "                WHERE p.settles_transaction_id = l.transaction_id"
+                        + "                  AND p.kind = 'repayment'"
+                        + "                  AND p.status = 'pending') AS repayment_pending"
+                        + "  FROM transaction l"
+                        + " WHERE l.kind = 'loan' AND l.status = 'approved'"
+                        + "   AND (l.creditor_id = :me OR l.debtor_id = :me)"
+                        + "   AND NOT EXISTS (SELECT 1 FROM transaction c"
+                        + "                    WHERE c.corrects_transaction_id = l.transaction_id"
+                        + "                      AND c.status = 'approved')"
+                        + "   AND NOT EXISTS (SELECT 1 FROM transaction r"
+                        + "                    WHERE r.settles_transaction_id = l.transaction_id"
+                        + "                      AND r.kind = 'repayment'"
+                        + "                      AND r.status = 'approved'"
+                        + "                      AND NOT EXISTS (SELECT 1 FROM transaction rc"
+                        + "                                       WHERE rc.corrects_transaction_id = r.transaction_id"
+                        + "                                         AND rc.status = 'approved'))"
+                        + " ORDER BY l.transaction_date, l.created_at, l.transaction_id")
+                .param("me", memberId)
+                .query((rs, rowNum) -> new OutstandingLoan(mapRow(rs, rowNum), rs.getBoolean("repayment_pending")))
+                .list();
+    }
+
+    /**
+     * {@code memberId}'s balance with each member they have an approved transaction with,
+     * per currency (Dashboard.Counterparty-1; Model 6 RT-3), from {@code memberId}'s side.
+     *
+     * pair_net stores each pair once, from the side of the member with the lower id
+     * (Technical Design 3). The sign is turned to the viewer's side here, in SQL, and
+     * nowhere else (Technical Design 14.2): {@code a_net_minor} when the viewer is
+     * {@code member_a}, its negative when they are {@code member_b}. A pair whose balance
+     * is now zero is still returned; which rows the screen keeps is DT-3, the caller's.
+     *
+     * Ordered by the other member's id and currency only so the result is stable; the
+     * screen sorts by name.
+     */
+    public List<PairNet> pairNetsFor(UUID memberId) {
+        return jdbc.sql("""
+                SELECT CASE WHEN member_a = :me THEN member_b ELSE member_a END     AS other,
+                       currency,
+                       CASE WHEN member_a = :me THEN a_net_minor ELSE -a_net_minor END AS net_minor
+                  FROM pair_net
+                 WHERE member_a = :me OR member_b = :me
+                 ORDER BY other, currency""")
+                .param("me", memberId)
+                .query((rs, rowNum) -> new PairNet(
+                        rs.getObject("other", UUID.class),
+                        Currency.getInstance(rs.getString("currency").strip()),
+                        rs.getLong("net_minor")))
+                .list();
+    }
+
+    /**
+     * The approved transactions of any kind between {@code memberId} and {@code otherId},
+     * in every currency, newest first in the same order as the history
+     * (Dashboard.Counterparty-2; Model 6 RT-4). Their effects add up to
+     * {@link #pairNetsFor}'s balance for that pair (T-Cpty-2a).
+     *
+     * Approved only, unlike {@link #findBetween}, which is the administrator's audit read
+     * of every status. The member must be one of the two; the caller passes the signed-in
+     * member, never an id from the request (SEC-2).
+     */
+    public List<LedgerTransaction> approvedBetween(UUID memberId, UUID otherId) {
+        return jdbc.sql("SELECT " + COLUMNS + " FROM transaction"
+                        + " WHERE status = 'approved'"
+                        + "   AND ((creditor_id = :me AND debtor_id = :other)"
+                        + "     OR (creditor_id = :other AND debtor_id = :me))"
+                        + " ORDER BY transaction_date DESC, created_at DESC, transaction_id DESC")
+                .param("me", memberId).param("other", otherId)
+                .query(TransactionRepository::mapRow).list();
+    }
+
     private static LedgerTransaction mapRow(ResultSet rs, int rowNum) throws SQLException {
         return new LedgerTransaction(
                 rs.getObject("transaction_id", UUID.class),
