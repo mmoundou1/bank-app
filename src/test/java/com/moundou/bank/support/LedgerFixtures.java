@@ -58,6 +58,11 @@ public final class LedgerFixtures {
         return id;
     }
 
+    /** Deactivates a member (Auth.Roles-3). Their transactions stay and still count (Auth.Roles-7). */
+    public void deactivate(UUID memberId) {
+        jdbc.sql("UPDATE member SET status = 'deactivated' WHERE member_id = :id").param("id", memberId).update();
+    }
+
     // ---- pending rows ---------------------------------------------------------------
 
     /** A pending loan: {@code lender} is creditor, {@code borrower} is debtor. */

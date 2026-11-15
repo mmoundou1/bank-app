@@ -84,6 +84,19 @@ public class MemberDirectory {
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
+    /**
+     * Every member, keyed by id, <em>including deactivated members</em>, in one query.
+     * For screens that need a name and whether the member is still active, such as People
+     * (MB-17): a balance with a deactivated member is shown, marked as no longer a member,
+     * while it is not zero (Dashboard.Counterparty-1, SRS 1.16; Model 6 DT-3).
+     */
+    public Map<UUID, Member> members() {
+        return jdbc.sql("SELECT member_id, display_name, time_zone, status FROM member")
+                .query(MemberDirectory::member)
+                .list().stream()
+                .collect(Collectors.toMap(Member::id, member -> member));
+    }
+
     /** Turns one row of the queries above into a {@link Member}. */
     private static Member member(ResultSet rs, int rowNum) throws SQLException {
         return new Member(
