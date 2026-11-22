@@ -14,11 +14,12 @@ rather than being edited in directly.
 
 | Document | Purpose |
 |---|---|
-| [Software Requirements Specification](https://moundou.atlassian.net/wiki/spaces/SD/pages/2457607) | Baselined requirements. Start here. |
+| [Start here](https://moundou.atlassian.net/wiki/spaces/SD/pages/1540098) | The space home: reading paths, and how the documentation is organised. |
+| [Software Requirements Specification](https://moundou.atlassian.net/wiki/spaces/SD/pages/2457607) | Baselined requirements. |
 | [Architecture Decision Log](https://moundou.atlassian.net/wiki/spaces/SD/pages/2818069) | Why the stack looks like this, and what each choice cost. |
 | [Requirements Traceability Matrix](https://moundou.atlassian.net/wiki/spaces/SD/pages/2228228) | Requirement to feature to Jira, both directions. |
-| [Test Derivation and Validation](https://moundou.atlassian.net/wiki/spaces/SD/pages/2883588) | 133 test cases derived before any code. |
-| [Technical Design](https://moundou.atlassian.net/wiki/spaces/SD/pages/9502722) | Modules, transaction boundaries, state machine, screens and routes. |
+| [Test Derivation and Validation](https://moundou.atlassian.net/wiki/spaces/SD/pages/2883588) | The tests the requirements need, derived before any code. |
+| System reference: [Architecture overview](https://moundou.atlassian.net/wiki/spaces/SD/pages/29982730), [Data model & ledger rules](https://moundou.atlassian.net/wiki/spaces/SD/pages/30572545), [Conventions & patterns](https://moundou.atlassian.net/wiki/spaces/SD/pages/30244868), [Screen map](https://moundou.atlassian.net/wiki/spaces/SD/pages/30212115), [Runtime & deployment](https://moundou.atlassian.net/wiki/spaces/SD/pages/30408736), [Testing guide](https://moundou.atlassian.net/wiki/spaces/SD/pages/30212133) | How the whole app works now. One page per feature sits in the Features folder. |
 | [Vision and Scope](https://moundou.atlassian.net/wiki/spaces/SD/pages/1572865) | Business problem, objectives, risks. |
 
 Backlog: Jira project **MB**.
