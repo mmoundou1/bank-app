@@ -5,7 +5,7 @@ not repeat the requirements or the design. Those live in Confluence, and this
 page points to them.
 
 - **SRS** says *what* the app must do. Every rule has an ID such as `Ledger.Entry-8`.
-- **Technical Design (TD)** says *how* it is built: modules, locks, routes.
+- **System reference** says *how* the whole app works ([Start here](https://moundou.atlassian.net/wiki/spaces/SD/pages/1540098) lists its pages), and each **feature page** says how one feature is built.
 - **ADR log** says *why* the expensive choices were made.
 - **This page** says *where* each of those lives in the code.
 
@@ -66,7 +66,7 @@ On the way back, the controller redirects to `GET /admin`. That page is rendered
 from the template `templates/admin.html`, and every word on it comes from
 `messages.properties`.
 
-Three rules hold everywhere (TD §2 and §6). Knowing them tells you where to look:
+Three rules hold everywhere ([Architecture overview](https://moundou.atlassian.net/wiki/spaces/SD/pages/29982730)). Knowing them tells you where to look:
 
 1. **Controllers call services, services call repositories.** A controller never
    runs SQL, and a repository never decides anything.
@@ -129,14 +129,14 @@ All code is under `src/main/java/com/moundou/bank/`.
 | `UndoRules` | Whether a record can be undone, and if not why: not a correction, approved, not already undone, not a loan still settled by a repayment (`Ledger.History-9`, `-11`, `INT-6`). Pure code, no actor; the history and the submit call the same method, so the link and the submit cannot disagree. Specified by `UndoRulesTests`. *(You wrote this one.)* |
 | `CompensationService` | Raises a compensating entry (MB-14): checks the member, locks the target, recognises a retried submission, asks `UndoRules`, then writes the correction, its history row and a pending alert in one transaction. *(You wrote this one.)* |
 | `LoanStanding` | What `loanStandingIfApproved` returns: is the loan reversed, and how many of its repayments still stand. The service decides from it. |
-| `AuditService` | The administrator's view of two members' dealings. It lives here because it reads ledger data; TD §2 lists it under `identity`. |
+| `AuditService` | The administrator's view of two members' dealings. It lives here because it reads ledger data. |
 | `LedgerConfig`, `LedgerProperties` | Wiring: the clock and the onboarding end date. |
 
 ### `notification`
 
 Services write an alert row in the same database transaction as the ledger change (the
 outbox). A worker sends them afterwards, so a slow or broken email provider can never
-slow down or fail a member's click (ADR-010, TD §7).
+slow down or fail a member's click (ADR-010, Technical Design §7).
 
 | Class | What it does |
 |---|---|
@@ -164,7 +164,7 @@ the Javadoc of `NotificationRepository.claimDue` and `BrevoEmailGateway`.
 | `AdminController` | `/admin`, `/admin/allow-list`, `/admin/allow-list/remove`, `/admin/members/{id}/deactivate`, `/admin/audit` | `admin.html`, `audit.html` |
 | `SecurityConfig` | Decides which routes are open, which need sign-in, and which need the administrator role | |
 
-| `DualConfirmationController` *(MB-12, done)* | `GET /pending/{id}`, `POST /pending/{id}/approve`, `POST /pending/{id}/decline`, `POST /transactions/{id}/cancel` (TD §8) | `pending.html`; the queue is `queue.html`, shown on `home.html` |
+| `DualConfirmationController` *(MB-12, done)* | `GET /pending/{id}`, `POST /pending/{id}/approve`, `POST /pending/{id}/decline`, `POST /transactions/{id}/cancel` | `pending.html`; the queue is `queue.html`, shown on `home.html` |
 | `RepaymentController` *(MB-13, done)* | `GET /repayments/new` (choose a loan), `GET /repayments/new?loan={id}` (the form, amount pre-filled), `POST /repayments` | `repayments-new.html` |
 | `HistoryController` *(MB-14)* | `GET /history` | `history.html` |
 | `CompensationController` *(MB-14)* | `GET /history/{id}/undo` (confirm screen), `POST /history/{id}/undo` | `undo.html`; both outcomes redirect to `/history` |
@@ -186,45 +186,19 @@ them in with `th:replace="~{layout :: head('title.key')}"` and `~{layout :: nav}
 
 ## 4. Patterns you will see repeatedly
 
-Once you recognize these, most classes read quickly.
-
-- **Outcome or Result types.** A service returns a small sealed interface
-  rather than throwing on bad input, for example
-  `EntryService.Outcome = Recorded | Rejected(fieldErrors)`. The controller uses
-  a `switch` to pick what to show. `fieldErrors` maps a form field to a message
-  key, so the page can print each error beside its field.
-- **Exceptions are for "you may not", not for "you typed it wrong."**
-  `NotPermittedException` becomes a 403 automatically. `AdminRuleException`
-  carries a message key to show.
-- **The actor comes first and comes from the session.** Service methods look like
-  `update(UUID actorId, ...)`. The controller passes `me.memberId()` from
-  `SignedInMember`, never an id taken from the form.
-- **Message keys, never text.** Java returns keys such as
-  `"ledger.entry.date.future"`, and the template turns them into words. If you
-  write a literal word in a template, `TemplateTextTests` fails the build.
-- **Money is a `long` of minor units plus a `Currency`.** 1250 USD means $12.50;
-  1250 XAF means 1,250 francs. It only becomes text in `Formats`.
-- **Enums mirror database values.** `TransactionStatus.PENDING.dbValue()` is
-  `"pending"`, which matches the `CHECK` constraint in `V1`.
+The patterns that repeat across the code (sealed outcomes, the actor from the
+session, message keys instead of text, money as minor units, Post/Redirect/Get and
+the rest) are described in one place, Confluence's
+[Conventions & patterns](https://moundou.atlassian.net/wiki/spaces/SD/pages/30244868). Read it once; most classes then read quickly.
 
 ---
 
 ## 5. Tests
 
 Tests sit in `src/test/java` under the same package as the class they test.
-
-| Name ends in | Suite | Needs | Run with |
-|---|---|---|---|
-| `...Tests` | fast | nothing | `mvn test` |
-| `...IT` | slow | Postgres | `mvn verify -DskipUnitTests=true`, with Docker or with `IT_DATABASE_URL` (see README) |
-
-- `web/*Tests` start only the web layer (`@WebMvcTest`), with the services
-  replaced by stand-ins (`@MockBean`). They test routes, security and rendering.
-- `*IT` tests run the real SQL. `support/TestDatabase` points them at a database
-  it wipes; `support/LedgerFixtures` creates members and transactions for them;
-  `support/MutableClock` lets a test change "today".
-- Test IDs from the Test Derivation page, such as `T-Entry-8a`, appear in test
-  names or comments, so searching for one finds its test.
+`...Tests` classes are the fast suite; `...IT` classes are the slow suite and need
+Postgres. How to run each, the helpers in `support/`, and how tests are named and
+checked are in Confluence's [Testing guide](https://moundou.atlassian.net/wiki/spaces/SD/pages/30212133).
 
 ---
 
@@ -236,12 +210,12 @@ Tests sit in `src/test/java` under the same package as the class they test.
 | MB-9 Sign-in | In progress (awaiting a check that sessions survive redeploys) | `identity/GoogleSignIn`, `SignInService`, `web/SecurityConfig`, `SignInController` |
 | MB-10 Roles and profile | In progress (awaiting a check on the live site) | `identity/AdminService`, `ProfileService`, `MemberAdministration`, `ledger/AuditService`, `web/AdminController`, `ProfileController` |
 | MB-11 Transaction entry | In progress (screen built; follow-ups in section 7) | `ledger/EntryService`, `EntryValidator`, `Amounts`, `EntryRequest`; `web/EntryController`, `templates/transactions-new.html`; `identity/MemberDirectory.counterpartiesFor` |
-| MB-12 Approval | Done | `TransactionStateMachine` (TD §5), `DualConfirmationService`, `DualConfirmationController`; templates `pending.html`, `queue.html`; queries in `TransactionRepository` (queues, `loanLifecycle`, `hasApprovedCorrection`). Queue, view, decline, cancel (with its alert, CR-18), and approving loans, repayments and corrections. Tested in `DualConfirmationServiceIT`, `DualConfirmationWebTests`, `TransactionStateMachineTests`, `ApprovalQueriesIT`. |
+| MB-12 Approval | Done | `TransactionStateMachine`, `DualConfirmationService`, `DualConfirmationController`; templates `pending.html`, `queue.html`; queries in `TransactionRepository` (queues, `loanLifecycle`, `hasApprovedCorrection`). Queue, view, decline, cancel (with its alert, CR-18), and approving loans, repayments and corrections. Tested in `DualConfirmationServiceIT`, `DualConfirmationWebTests`, `TransactionStateMachineTests`, `ApprovalQueriesIT`. |
 | MB-13 Repayment | Done (PR #28) | `RepaymentService`, `RepaymentController`; template `repayments-new.html`; query `TransactionRepository.outstandingLoansOwedBy`; `Formats.plainAmount` pre-fills the amount. Approval is MB-12's. Tested in `RepaymentServiceIT`, `RepaymentQueriesIT`, `RepaymentLockIT`, `RepaymentWebTests`, `RepaymentTemplatesTests`. |
 | MB-14 History and corrections | Done (PRs #29, #30) | History: `HistoryService`, `HistoryEntry`, `HistoryDirection`, `HistoryController`, `history.html`; queries `historyFor`, `MemberDirectory.displayNames`; `Formats.dateTimeIn`. Undoing a record: `UndoRules`, `CompensationService`, `CompensationController`, `undo.html`; query `relatedTo`. Approving a correction is MB-12's, which also refuses a correction of a correction. Tested in `HistoryServiceIT`, `HistoryQueriesIT`, `HistoryWebTests`, `HistoryTemplatesTests`, `UndoRulesTests`, `UndoQueriesIT`, `CompensationServiceIT`, `CompensationWebTests`. |
 | MB-15, MB-17 Dashboard and counterparties | To do | `ledger` queries over the `member_net` and `pair_net` views (already in `V1`); `home.html` |
-| MB-18, MB-19 Alerts | Done (PR #31; checked live 2026-11-12) | Everything in `notification` above, plus `templates/email/` and `MemberDirectory.emailOf`. Configured on Render with `BREVO_API_KEY` (an API key, `xkeysib-…`, restricted to transactional email) and `ALERT_SENDER_EMAIL`. Design: TD §7. Tested in `AlertRulesTests`, `RetryPolicyTests`, `NotificationRepositoryIT`, `OutboxWorkerIT`, `ThymeleafAlertEmailsTests`, `BrevoEmailGatewayTests`, `OutboxScheduleTests`. |
-| MB-6 Hosting | Partly done | Render, Neon and Google are live. Email provider chosen: Brevo (MB-18). Still to do: keep-alive scheduler (until then, alert retries wait while the free instance sleeps; TD §7), switching to Neon's direct endpoint |
+| MB-18, MB-19 Alerts | Done (PR #31; checked live 2026-11-12) | Everything in `notification` above, plus `templates/email/` and `MemberDirectory.emailOf`. Configured on Render with `BREVO_API_KEY` (an API key, `xkeysib-…`, restricted to transactional email) and `ALERT_SENDER_EMAIL`. Design: Technical Design §7. Tested in `AlertRulesTests`, `RetryPolicyTests`, `NotificationRepositoryIT`, `OutboxWorkerIT`, `ThymeleafAlertEmailsTests`, `BrevoEmailGatewayTests`, `OutboxScheduleTests`. |
+| MB-6 Hosting | Partly done | Render, Neon and Google are live. Email provider chosen: Brevo (MB-18). Still to do: keep-alive scheduler (until then, alert retries wait while the free instance sleeps; Technical Design §7), switching to Neon's direct endpoint |
 
 ---
 
@@ -284,11 +258,8 @@ controller or template on purpose.
 
 ---
 
-## 8. Where the code differs from the Technical Design
+## 8. Known gaps
 
-Differences that are known and deliberate:
-
-- The health endpoint is in `health`, not in `ops` (TD §2).
-- `AuditService` is in `ledger`, not in `identity` (TD §2), because it reads ledger data.
-- The app connects through Neon's pooler endpoint, not the direct endpoint TD §10
-  asks for. This is to be fixed under MB-6.
+Where the code does not yet match a decision, the System reference page for that
+area says so. Today: the app connects through Neon's pooler endpoint rather than the
+direct one ([Runtime & deployment](https://moundou.atlassian.net/wiki/spaces/SD/pages/30408736)), to be fixed under MB-6.
