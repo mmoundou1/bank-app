@@ -4,7 +4,7 @@ import java.util.List;
 
 /**
  * Whether a record can be undone by a compensating entry, and if not, why
- * (Ledger.History-9, -11, -12). Pure code: no database, no actor. The answer is a
+ * (Ledger.History-9, -11, -12; INT-6). Pure code: no database, no actor. The answer is a
  * fact about the record, the same for both of its members.
  *
  * Used twice, so the history's "Undo this record" link and the submit can never

@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.Map;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -34,7 +35,7 @@ public class HistoryService {
                 .orElseThrow(() -> new NotPermittedException(viewerId, "Member is inactive"));
 
         List<LedgerTransaction> rows = transactions.historyFor(viewer.id());
-        Map<UUID, Boolean> activeByMember = new java.util.HashMap<>();
+        Map<UUID, Boolean> activeByMember = new HashMap<>();
         activeByMember.put(viewer.id(), viewer.active());
 
         for (LedgerTransaction row : rows) {

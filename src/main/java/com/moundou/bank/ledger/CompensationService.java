@@ -140,6 +140,4 @@ public class CompensationService {
                 .orElseThrow(() -> new NotPermittedException(actorId, "Member is inactive"));
     }
 
-
-
 }
