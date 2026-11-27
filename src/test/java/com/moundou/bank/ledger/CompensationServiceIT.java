@@ -223,6 +223,31 @@ class CompensationServiceIT {
             ledger.approve(recorded(undo(ama, repaid, null)).id());            // undo the repayment first
             assertThat(undo(ben, loan, null)).isInstanceOf(Outcome.Recorded.class);
         }
+
+        @Test
+        void aRecordWhoseOtherMemberIsDeactivatedCannotBeUndone() {           // T-Hist-12a, CR-21
+            deactivate(ben);
+            assertThat(undo(ama, loan, null))
+                    .isEqualTo(new Outcome.Rejected("ledger.history.undo.otherMemberDeactivated"));
+            assertThat(correctionsOf(loan)).as("no record").isZero();
+            assertThat(alerts()).as("no alert queued").isZero();
+        }
+
+        @Test
+        void aRepaidLoanWithADeactivatedMemberIsNotSentToUndoTheRepaymentFirst() {   // question 4 before 5
+            ledger.approve(ledger.repayment(loan));
+            deactivate(ben);
+            assertThat(undo(ama, loan, null))
+                    .isEqualTo(new Outcome.Rejected("ledger.history.undo.otherMemberDeactivated"));
+        }
+
+        @Test
+        void itCanBeUndoneAgainOnceTheMemberIsReactivated() {                 // the fact is read each time
+            deactivate(ben);
+            assertThat(undo(ama, loan, null)).isInstanceOf(Outcome.Rejected.class);
+            jdbc.sql("UPDATE member SET status = 'active' WHERE member_id = :id").param("id", ben).update();
+            assertThat(undo(ama, loan, null)).isInstanceOf(Outcome.Recorded.class);
+        }
     }
 
     @Nested
@@ -261,7 +286,22 @@ class CompensationServiceIT {
         assertThatThrownBy(() -> compensations.targetDetails(cleo, loan)).isInstanceOf(NotPermittedException.class);
     }
 
+    @Test
+    void theConfirmScreenAlsoSaysTheOtherMemberIsDeactivated() {             // T-Hist-12a: same answer as the submit
+        deactivate(ben);
+        assertThat(compensations.targetDetails(ama, loan).check())
+                .isEqualTo(new UndoRules.Check.Refused("ledger.history.undo.otherMemberDeactivated"));
+    }
+
     // ---- helpers ------------------------------------------------------------------
+
+    void deactivate(UUID member) {
+        jdbc.sql("UPDATE member SET status = 'deactivated' WHERE member_id = :id").param("id", member).update();
+    }
+
+    int alerts() {
+        return jdbc.sql("SELECT count(*) FROM notification").query(Integer.class).single();
+    }
 
     Outcome undo(UUID actor, UUID target, String note) {
         return compensations.compensation(actor, target, note, UUID.randomUUID());
