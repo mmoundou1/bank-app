@@ -107,6 +107,17 @@ class RepaymentServiceIT {
         return ((Outcome.Rejected) outcome).fieldErrors();
     }
 
+    static final String LENDER_DEACTIVATED = "ledger.repayment.loan.lenderDeactivated";   // Ledger.Repayment-11
+
+    void deactivate(UUID member) {
+        jdbc.sql("UPDATE member SET status = 'deactivated' WHERE member_id = :m").param("m", member).update();
+    }
+
+    /** Alerts queued for any transaction. */
+    int alerts() {
+        return jdbc.sql("SELECT count(*) FROM notification").query(Integer.class).single();
+    }
+
     /** Repayments of the loan, whatever their state. */
     int repaymentsOfTheLoan() {
         return jdbc.sql("SELECT count(*) FROM transaction WHERE settles_transaction_id = :l")
@@ -286,6 +297,28 @@ class RepaymentServiceIT {
                     .isInstanceOf(NotPermittedException.class);
             assertThat(repaymentsOfTheLoan()).isZero();
         }
+
+        @Test
+        void aLoanWhoseLenderIsDeactivated() {   // T-Repay-11a, Ledger.Repayment-11 (CR-21)
+            deactivate(ama);
+            assertThat(rejected(submit(ben, repay(loan, "100.00", "USD"))))
+                    .containsExactly(Map.entry("loan", LENDER_DEACTIVATED));
+            assertThat(repaymentsOfTheLoan()).as("no record").isZero();
+            assertThat(alerts()).as("no alert queued").isZero();
+        }
+
+        @Test
+        void aDeactivatedLenderIsGivenAsTheReasonEvenWithARepaymentAlreadyPending() {   // rule L5 before L6
+            // Ben recorded a repayment; Ama was deactivated before approving it. A second
+            // submit is refused because of the lasting fact (Ama can never approve), not
+            // because a repayment is pending: that one will wait for ever too, and Ben can
+            // only cancel it (Ledger.Approval-11).
+            recorded(submit(ben, repay(loan, "100.00", "USD")));
+            deactivate(ama);
+            assertThat(rejected(submit(ben, repay(loan, "100.00", "USD"))))
+                    .containsExactly(Map.entry("loan", LENDER_DEACTIVATED));
+            assertThat(repaymentsOfTheLoan()).isOne();
+        }
     }
 
     // ---- the two read methods -----------------------------------------------------
@@ -297,6 +330,25 @@ class RepaymentServiceIT {
         assertThat(repayments.outstandingLoansOwedBy(ama)).isEmpty();
         assertThat(repayments.viewTransaction(ama, loan)).isEmpty();
         assertThat(repayments.viewTransaction(ben, UUID.randomUUID())).isEmpty();
+    }
+
+    @Test
+    void aLoanWhoseLenderIsDeactivatedIsNotOffered() {   // T-Repay-8f, Ledger.Repayment-8 (CR-21)
+        UUID fromCleo = ledger.approvedLoan(cleo, ben, 50_000, XAF);
+        deactivate(ama);
+
+        assertThat(repayments.outstandingLoansOwedBy(ben))
+                .as("only the loan from the active lender").extracting(LedgerTransaction::id).containsExactly(fromCleo);
+        assertThat(repayments.viewTransaction(ben, loan))
+                .as("/repayments/new?loan= for Ama's loan offers nothing to fill in").isEmpty();
+    }
+
+    @Test
+    void aLoanIsOfferedAgainWhenItsLenderIsReactivated() {   // CR-21: the fact is read each time, never stored
+        deactivate(ama);
+        assertThat(repayments.outstandingLoansOwedBy(ben)).isEmpty();
+        jdbc.sql("UPDATE member SET status = 'active' WHERE member_id = :m").param("m", ama).update();
+        assertThat(repayments.outstandingLoansOwedBy(ben)).extracting(LedgerTransaction::id).containsExactly(loan);
     }
 
     // ---- retries and races ------------------------------------------------------------
