@@ -1,6 +1,14 @@
 package com.moundou.bank.ledger;
 
-public class RepaymentRules {
+/**
+ * Whether an outstanding record is eligible for repayment
+ * Pure code: no database, no actor, per our "Conventions and Patterns". The answer is a fact about the record.
+ * Called by a signed-in member from the Homepage or by clicking the "Home" button.
+ *
+ * Specified by RepaymentRulesTests.
+ */
+
+public final class RepaymentRules {
 
     private RepaymentRules() {}
 
@@ -9,15 +17,18 @@ public class RepaymentRules {
         if (viewerIsBorrower) {
 
             if (lenderActive) {
-                if (repaymentWaiting)
+                if (repaymentWaiting) {
                     return LoanAction.REPAYMENT_WAITING;
-                else
+                }
+                else {
                     return LoanAction.REPAY;
-            } else
+                }
+            } else {
                 return LoanAction.LENDER_DEACTIVATED;
-        } else
+            }
+        } else {
             return LoanAction.NONE;
-
+        }
 
     }
 
