@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class RepaymentService {
@@ -40,7 +41,19 @@ public class RepaymentService {
         Member debtor = members.findById(debtorId).filter(Member::active)
                 .orElseThrow(() -> new NotPermittedException(debtorId, "Member is inactive"));
 
-        return transactions.outstandingLoansOwedBy(debtor.id());
+        List<LedgerTransaction> outstandingLoansOwedBy =  transactions.outstandingLoansOwedBy(debtor.id());
+
+        Set<UUID> activeCreditorIds = outstandingLoansOwedBy.stream()
+                .map(LedgerTransaction::creditor)
+                .distinct()
+                .filter(creditorId -> members.findById(creditorId)
+                        .map(Member::active)
+                        .orElse(false))
+                .collect(Collectors.toSet());
+
+        return outstandingLoansOwedBy.stream()
+                .filter(tx -> activeCreditorIds.contains(tx.creditor()))
+                .toList();
 
     }
 
@@ -48,9 +61,19 @@ public class RepaymentService {
 
         Member debtor = members.findById(debtorId).filter(Member::active)
                 .orElseThrow(() -> new NotPermittedException(debtorId, "Member is inactive"));
-        List<LedgerTransaction> list =  transactions.outstandingLoansOwedBy(debtorId);
+        List<LedgerTransaction> outstandingLoansOwedBy =  this.outstandingLoansOwedBy(debtorId);
 
-        return list.stream().filter(t -> t.id().equals(loanId)).findFirst();
+        Set<UUID> activeCreditorIds = outstandingLoansOwedBy.stream()
+                .map(LedgerTransaction::creditor)
+                .distinct()
+                .filter(creditorId -> members.findById(creditorId)
+                        .map(Member::active)
+                        .orElse(false))
+                .collect(Collectors.toSet());
+
+        return outstandingLoansOwedBy.stream()
+                                .filter(tx -> activeCreditorIds.contains(tx.creditor())).findFirst();
+
     }
 
     @Transactional
@@ -61,11 +84,17 @@ public class RepaymentService {
         String currencyText = repaymentRequest.currencyCode();
         Currency currency;
         long amount;
-        List<LedgerTransaction> list;
+        List<LedgerTransaction> outstandingLoansOwedBy;
         Map<String, String> errors = new HashMap<>();
-        Member debtor = members.findById(actorId).filter(Member::active)
+        boolean viewerIsBorrower = false;
+        boolean lenderActive = false;
+        boolean repaymentWaiting = false;
+
+
+        Member member = members.findById(actorId).filter(Member::active)
                 .orElseThrow(() -> new NotPermittedException(actorId, "Member is inactive"));
-        LocalDate todaysDate = LocalDate.now(clock.withZone(debtor.timeZone()));
+
+        LocalDate todaysDate = LocalDate.now(clock.withZone(member.timeZone()));
 
         try {
             currency = Currency.getInstance(currencyText);
@@ -78,18 +107,31 @@ public class RepaymentService {
         LedgerTransaction lockedItem = transactions.lockForUpdate(loanID)
                                                 .orElseThrow(() -> new NotPermittedException(loanID, "does not exist."));
 
+        if(lockedItem.debtor().equals(member.id()))
+            viewerIsBorrower = true;
+
+        Member creditor = members.findById(lockedItem.creditor()).filter(Member::active)
+                .orElseThrow(() -> new NotPermittedException(lockedItem.creditor(), "Member is inactive"));
+
+        lenderActive = true;
+
         if (repaymentRequest.submissionKey() != null) {
             Optional<LedgerTransaction> earlier = transactions
                     .findBySubmissionKey(actorId, repaymentRequest.submissionKey());
-            if (earlier.isPresent())
+            if (earlier.isPresent()) {
                 return new Outcome.Recorded(earlier.get(), true);
+            }
         }
 
-        list =  transactions.outstandingLoansOwedBy(actorId);
+        outstandingLoansOwedBy =  transactions.outstandingLoansOwedBy(actorId);
 
-        if(!list.stream().anyMatch(t -> t.id().equals(loanID))) {
+        if(!outstandingLoansOwedBy.stream().anyMatch(t -> t.id().equals(loanID))) {
+
+            repaymentWaiting = true;
             errors.put("loan", "ledger.repayment.loan.notOutstanding");
+
             return new Outcome.Rejected(errors);
+
         }
 
         switch(Amounts.parse(amountText, currency, locale)) {

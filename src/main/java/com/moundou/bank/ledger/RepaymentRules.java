@@ -3,7 +3,7 @@ package com.moundou.bank.ledger;
 /**
  * Whether an outstanding record is eligible for repayment
  * Pure code: no database, no actor, per our "Conventions and Patterns". The answer is a fact about the record.
- * Called by a signed-in member from the Homepage or by clicking the "Home" button.
+ * Called by DashboardService and RepaymentService.
  *
  * Specified by RepaymentRulesTests.
  */
