@@ -427,6 +427,23 @@ public class TransactionRepository {
                 .single();
     }
 
+    /**
+     * Whether a repayment of {@code loanId} is waiting for its lender's decision
+     * (Ledger.Repayment-8; rule L6 on the Dashboard feature page). One of the three facts
+     * RepaymentRules.check needs. Read under the loan's lock, so it can't change before
+     * the caller has decided.
+     */
+    public boolean hasPendingRepayment(UUID loanId) {
+        return jdbc.sql("""
+                SELECT EXISTS (
+                    SELECT 1 FROM transaction
+                     WHERE settles_transaction_id = :loan
+                       AND kind = 'repayment' AND status = 'pending')""")
+                .param("loan", loanId)
+                .query(Boolean.class)
+                .single();
+    }
+
     private static LedgerTransaction mapRow(ResultSet rs, int rowNum) throws SQLException {
         return new LedgerTransaction(
                 rs.getObject("transaction_id", UUID.class),
