@@ -20,7 +20,7 @@
   <properties>
     <java.version>21</java.version>
     <skipUnitTests>false</skipUnitTests>
-    <testcontainers.version>1.20.3</testcontainers.version>
+    <testcontainers.version>1.21.4</testcontainers.version>
     <jsoup.version>1.18.1</jsoup.version>
     <jqwik.version>1.9.0</jqwik.version>  <!-- built on JUnit Platform 1.10, matching Spring Boot 3.3 --> 
   </properties>
