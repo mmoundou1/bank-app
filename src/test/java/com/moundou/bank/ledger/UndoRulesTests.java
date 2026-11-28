@@ -36,6 +36,11 @@ class UndoRulesTests {
     static final String NOT_APPROVED = "ledger.history.undo.notApproved";
     static final String ALREADY_UNDONE = "ledger.history.correction.alreadyCorrected";       // INT-6
     static final String REPAYMENT_FIRST = "ledger.history.correction.conflictsWithRepayment"; // History-11
+    static final String OTHER_DEACTIVATED = "ledger.history.undo.otherMemberDeactivated";       // History-12, CR-21
+
+    /** The third argument of UndoRules.check: both parties' accounts are active. */
+    static final boolean BOTH_ACTIVE = true;
+    static final boolean A_PARTY_DEACTIVATED = false;
 
     // ---- the four questions, one at a time -------------------------------------------
 
@@ -192,28 +197,87 @@ class UndoRulesTests {
         List<LedgerTransaction> rows = new ArrayList<>();
         LedgerTransaction loan = loan(APPROVED);
         rows.add(loan);
-        assertThat(UndoRules.check(loan, rows)).as("Outstanding").isEqualTo(new Undoable());
+        assertThat(UndoRules.check(loan, rows, BOTH_ACTIVE)).as("Outstanding").isEqualTo(new Undoable());
 
         LedgerTransaction repayment = repaymentOf(loan, APPROVED);                  // L1: repaid
         rows.add(repayment);
-        assertThat(UndoRules.check(loan, rows)).as("Settled").isEqualTo(new Refused(REPAYMENT_FIRST));
-        assertThat(UndoRules.check(repayment, rows)).as("its repayment").isEqualTo(new Undoable());
+        assertThat(UndoRules.check(loan, rows, BOTH_ACTIVE)).as("Settled").isEqualTo(new Refused(REPAYMENT_FIRST));
+        assertThat(UndoRules.check(repayment, rows, BOTH_ACTIVE)).as("its repayment").isEqualTo(new Undoable());
 
         LedgerTransaction undoRepayment = correctionOf(repayment, APPROVED);        // L2: repayment undone
         rows.add(undoRepayment);
-        assertThat(UndoRules.check(repayment, rows)).as("repayment, undone").isEqualTo(new Refused(ALREADY_UNDONE));
-        assertThat(UndoRules.check(undoRepayment, rows)).as("the correction").isEqualTo(new Refused(IS_A_CORRECTION));
-        assertThat(UndoRules.check(loan, rows)).as("Outstanding again").isEqualTo(new Undoable());
+        assertThat(UndoRules.check(repayment, rows, BOTH_ACTIVE)).as("repayment, undone").isEqualTo(new Refused(ALREADY_UNDONE));
+        assertThat(UndoRules.check(undoRepayment, rows, BOTH_ACTIVE)).as("the correction").isEqualTo(new Refused(IS_A_CORRECTION));
+        assertThat(UndoRules.check(loan, rows, BOTH_ACTIVE)).as("Outstanding again").isEqualTo(new Undoable());
 
         LedgerTransaction undoLoan = correctionOf(loan, APPROVED);                  // L3: loan undone
         rows.add(undoLoan);
-        assertThat(UndoRules.check(loan, rows)).as("Reversed, final").isEqualTo(new Refused(ALREADY_UNDONE));
+        assertThat(UndoRules.check(loan, rows, BOTH_ACTIVE)).as("Reversed, final").isEqualTo(new Refused(ALREADY_UNDONE));
+    }
+
+    // ---- CR-21: a member whose account is deactivated -------------------------------------
+
+    /**
+     * Ledger.History-12 (SRS 1.17). A correction needs the other member's approval, and a
+     * deactivated member can't sign in (Auth.Login-5), so it would wait for ever. The fact
+     * is "both parties are active": the member asking is signed in, so if either party is
+     * deactivated, it is the other one. That keeps the answer a fact about the record, the
+     * same for both of its members, like every other question here.
+     *
+     * Asked after question 3 and before question 4. Permanent facts first: a correction, a
+     * record that never counted, or one already undone gets the same answer as before. And
+     * before "undo the repayment first", because that advice would send the member to
+     * undo a repayment, which needs the same deactivated member's approval.
+     */
+    @Nested
+    class Question4_IsTheOtherMemberDeactivated {
+
+        @Test
+        void anApprovedLoanCannotBeUndoneWithADeactivatedMember() {           // T-Hist-12a
+            assertThat(checkWithAPartyDeactivated(loan(APPROVED))).isEqualTo(new Refused(OTHER_DEACTIVATED));
+        }
+
+        @Test
+        void anApprovedRepaymentCannotBeUndoneWithADeactivatedMember() {      // T-Hist-12a
+            LedgerTransaction loan = loan(APPROVED);
+            assertThat(checkWithAPartyDeactivated(repaymentOf(loan, APPROVED), loan))
+                    .isEqualTo(new Refused(OTHER_DEACTIVATED));
+        }
+
+        @Test
+        void itIsAskedBeforeRepaymentFirst() {                                 // question 4 before 5
+            LedgerTransaction loan = loan(APPROVED);
+            assertThat(checkWithAPartyDeactivated(loan, repaymentOf(loan, APPROVED)))
+                    .as("undoing the repayment would need the same member's approval")
+                    .isEqualTo(new Refused(OTHER_DEACTIVATED));
+        }
+
+        @Test
+        void theEarlierQuestionsStillDecideFirst() {                          // questions 1 to 3 before 4
+            LedgerTransaction loan = loan(APPROVED);
+            assertThat(checkWithAPartyDeactivated(correctionOf(loan, APPROVED)))
+                    .as("a correction").isEqualTo(new Refused(IS_A_CORRECTION));
+            assertThat(checkWithAPartyDeactivated(loan(PENDING)))
+                    .as("a record that never counted").isEqualTo(new Refused(NOT_APPROVED));
+            assertThat(checkWithAPartyDeactivated(loan, correctionOf(loan, APPROVED)))
+                    .as("already undone").isEqualTo(new Refused(ALREADY_UNDONE));
+        }
+
+        @Test
+        void withBothActiveNothingChanges() {
+            assertThat(check(loan(APPROVED))).isEqualTo(new Undoable());
+        }
     }
 
     // ---- helpers ------------------------------------------------------------------------
 
     private static Check check(LedgerTransaction target, LedgerTransaction... related) {
-        return UndoRules.check(target, List.of(related));
+        return UndoRules.check(target, List.of(related), BOTH_ACTIVE);
+    }
+
+    /** As check, with one of the record's two members deactivated. */
+    private static Check checkWithAPartyDeactivated(LedgerTransaction target, LedgerTransaction... related) {
+        return UndoRules.check(target, List.of(related), A_PARTY_DEACTIVATED);
     }
 
     /** Ama lent Ben $20.00. */

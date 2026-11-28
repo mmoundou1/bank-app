@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.Map;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -34,6 +35,17 @@ public class HistoryService {
                 .orElseThrow(() -> new NotPermittedException(viewerId, "Member is inactive"));
 
         List<LedgerTransaction> rows = transactions.historyFor(viewer.id());
+        Map<UUID, Boolean> activeByMember = new HashMap<>();
+        activeByMember.put(viewer.id(), viewer.active());
+
+        for (LedgerTransaction row : rows) {
+            for (UUID memberId : List.of(row.creditor(), row.debtor())) {
+                activeByMember.computeIfAbsent(memberId, id ->
+                        members.findById(id)
+                                .map(Member::active)
+                                .orElse(false));
+            }
+        }
         Map<UUID, String> names = members.displayNames();
         List<HistoryEntry> history = new ArrayList<>();
         Map<UUID, LedgerTransaction> rowsById = rows.stream()
@@ -42,14 +54,20 @@ public class HistoryService {
                         Function.identity()));
 
         for (LedgerTransaction row : rows)
-            history.add(toEntry(row, viewer.id(), rows, rowsById, names));
+            history.add(toEntry(
+                    row, viewer.id(), rows, rowsById, names, activeByMember));
 
         return history;
 
     }
 
-    private static HistoryEntry toEntry(LedgerTransaction row, UUID viewerId, List<LedgerTransaction> rows,
-                                                        Map<UUID, LedgerTransaction> rowsById, Map<UUID, String> names) {
+    private static HistoryEntry toEntry(
+            LedgerTransaction row,
+            UUID viewerId,
+            List<LedgerTransaction> rows,
+            Map<UUID, LedgerTransaction> rowsById,
+            Map<UUID, String> names,
+            Map<UUID, Boolean> activeByMember) {
 
         HistoryDirection direction = null;
         HistoryDirection targetDirection = null;
@@ -76,6 +94,10 @@ public class HistoryService {
         if(row.initiatedBy().equals(viewerId))
             recordedByYou = true;
 
+        boolean bothPartiesActive =
+                activeByMember.getOrDefault(row.creditor(), false)
+                        && activeByMember.getOrDefault(row.debtor(), false);
+
         return new HistoryEntry(direction,
                 counterParty,
                 recordedByYou,
@@ -90,7 +112,7 @@ public class HistoryService {
                 targetDirection,
                 targetDate,
                 row.id(),
-                undoLink(row, rows));
+                undoLink(row, rows, bothPartiesActive));
 
     }
 
@@ -100,14 +122,17 @@ public class HistoryService {
      * the link is also hidden while a correction of it is pending (decision 3, display
      * only, so it is not part of UndoRules).
      */
-    private static HistoryEntry.UndoLink undoLink(LedgerTransaction row, List<LedgerTransaction> rows) {
+    private static HistoryEntry.UndoLink undoLink(
+            LedgerTransaction row,
+            List<LedgerTransaction> rows,
+            boolean bothPartiesActive) {
         boolean correctionPending = rows.stream()
                 .anyMatch(tx -> tx.kind() == TransactionKind.COMPENSATING
                         && tx.status() == TransactionStatus.PENDING
                         && row.id().equals(tx.correctsTransactionId()));
         if (correctionPending)
             return HistoryEntry.UndoLink.NONE;
-        return switch (UndoRules.check(row, rows)) {
+        return switch (UndoRules.check(row, rows, bothPartiesActive)) {
             case UndoRules.Check.Undoable undoable -> HistoryEntry.UndoLink.SHOW;
             case UndoRules.Check.Refused refused ->
                     "ledger.history.correction.conflictsWithRepayment".equals(refused.messageKey())

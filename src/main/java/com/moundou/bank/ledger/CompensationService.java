@@ -50,7 +50,10 @@ public class CompensationService {
     @Transactional(readOnly = true)
     public UndoTarget targetDetails(UUID actorId, UUID targetId) {
         LedgerTransaction target = checkClient(actorId, targetId);
-        return new UndoTarget(target, UndoRules.check(target, transactions.relatedTo(target.id())));
+        return new UndoTarget(target, UndoRules.check(
+                target,
+                transactions.relatedTo(target.id()),
+                bothPartiesActive(target)));
     }
 
     /**
@@ -74,7 +77,10 @@ public class CompensationService {
         if (earlier.isPresent())
             return new Outcome.Recorded(earlier.get(), true);
 
-        if (UndoRules.check(locked, transactions.relatedTo(locked.id())) instanceof UndoRules.Check.Refused refused)
+        if (UndoRules.check(
+                locked,
+                transactions.relatedTo(locked.id()),
+                bothPartiesActive(locked)) instanceof UndoRules.Check.Refused refused)
             return new Outcome.Rejected(refused.messageKey());
 
         NewTransaction newTransaction = new NewTransaction(UUID.randomUUID(),
@@ -101,6 +107,17 @@ public class CompensationService {
         outbox.enqueue(newTransaction.id(), counterparty, OutboxWriter.AlertKind.PENDING_ALERT);
 
         return new Outcome.Recorded(transactions.findById(newTransaction.id()).orElseThrow(), false);
+    }
+
+    private boolean bothPartiesActive(LedgerTransaction target) {
+        boolean creditorActive = members.findById(target.creditor())
+                .map(Member::active)
+                .orElse(false);
+        boolean debtorActive = members.findById(target.debtor())
+                .map(Member::active)
+                .orElse(false);
+
+        return creditorActive && debtorActive;
     }
 
     private LedgerTransaction checkClient(UUID actorId, UUID targetId) {

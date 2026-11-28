@@ -4,7 +4,7 @@ import java.util.List;
 
 /**
  * Whether a record can be undone by a compensating entry, and if not, why
- * (Ledger.History-9, -11; INT-6). Pure code: no database, no actor. The answer is a
+ * (Ledger.History-9, -11, -12; INT-6). Pure code: no database, no actor. The answer is a
  * fact about the record, the same for both of its members.
  *
  * Used twice, so the history's "Undo this record" link and the submit can never
@@ -34,8 +34,9 @@ public final class UndoRules {
      * @param related rows that may point at it: its corrections, and for a loan its
      *                repayments and their corrections. Rows that point elsewhere are
      *                ignored, so the history can pass its whole list.
+     * @param bothPartiesActive whether both members' accounts are active
      */
-    public static Check check(LedgerTransaction target, List<LedgerTransaction> related) {
+    public static Check check(LedgerTransaction target, List<LedgerTransaction> related, boolean bothPartiesActive) {
 
         if (target.kind() == TransactionKind.COMPENSATING)
             return new Check.Refused("ledger.history.undo.isCorrection");
@@ -46,6 +47,9 @@ public final class UndoRules {
 
         if (isUndone(target, related))
             return new Check.Refused("ledger.history.correction.alreadyCorrected");
+
+        if (!bothPartiesActive)
+            return new Check.Refused("ledger.history.undo.otherMemberDeactivated");
 
         if (target.kind() == TransactionKind.LOAN) {
             boolean settled = related.stream()
@@ -62,7 +66,7 @@ public final class UndoRules {
 
     /**
      * Whether an approved correction points at {@code row}. Used for the target
-     * (question 3) and for each of a loan's repayments (question 4): one rule, two rows.
+     * (question 3) and for each of a loan's repayments (question 5): one rule, two rows.
      * A correction points with correctsTransactionId; settlesTransactionId is only ever
      * set on a repayment.
      */

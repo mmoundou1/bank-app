@@ -224,6 +224,19 @@ class HistoryServiceIT {
     }
 
     @Test
+    void aRecordWithADeactivatedMemberOffersNoUndo() {                        // T-Hist-12a, CR-21
+        UUID lent = ledger.approvedLoan(ama, ben, 2000, USD);
+        UUID repaid = ledger.approve(ledger.repayment(ledger.approvedLoan(ama, ben, 500, USD)));
+        jdbc.sql("UPDATE member SET status = 'deactivated' WHERE member_id = :id").param("id", ben).update();
+
+        assertThat(entryFor(ama, lent).undo()).isEqualTo(HistoryEntry.UndoLink.NONE);
+        assertThat(entryFor(ama, repaid).undo()).as("a repayment too").isEqualTo(HistoryEntry.UndoLink.NONE);
+
+        jdbc.sql("UPDATE member SET status = 'active' WHERE member_id = :id").param("id", ben).update();
+        assertThat(entryFor(ama, lent).undo()).as("reactivated").isEqualTo(HistoryEntry.UndoLink.SHOW);
+    }
+
+    @Test
     void recordsThatNeverCountedOfferNothing() {
         UUID pending = ledger.loan(ama, ben, 2000, USD);
         UUID declined = ledger.decline(ledger.loan(ama, ben, 300, USD));

@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class RepaymentService {
@@ -40,7 +41,19 @@ public class RepaymentService {
         Member debtor = members.findById(debtorId).filter(Member::active)
                 .orElseThrow(() -> new NotPermittedException(debtorId, "Member is inactive"));
 
-        return transactions.outstandingLoansOwedBy(debtor.id());
+        List<LedgerTransaction> outstandingLoansOwedBy =  transactions.outstandingLoansOwedBy(debtor.id());
+
+        Set<UUID> activeCreditorIds = outstandingLoansOwedBy.stream()
+                .map(LedgerTransaction::creditor)
+                .distinct()
+                .filter(creditorId -> members.findById(creditorId)
+                        .map(Member::active)
+                        .orElse(false))
+                .collect(Collectors.toSet());
+
+        return outstandingLoansOwedBy.stream()
+                .filter(tx -> activeCreditorIds.contains(tx.creditor()))
+                .toList();
 
     }
 
@@ -48,9 +61,11 @@ public class RepaymentService {
 
         Member debtor = members.findById(debtorId).filter(Member::active)
                 .orElseThrow(() -> new NotPermittedException(debtorId, "Member is inactive"));
-        List<LedgerTransaction> list =  transactions.outstandingLoansOwedBy(debtorId);
-
-        return list.stream().filter(t -> t.id().equals(loanId)).findFirst();
+        // this.outstandingLoansOwedBy already leaves out loans whose lender is deactivated,
+        // so only the loan asked for has to be picked out of it.
+        return this.outstandingLoansOwedBy(debtorId).stream()
+                .filter(t -> t.id().equals(loanId))
+                .findFirst();
     }
 
     @Transactional
@@ -61,11 +76,13 @@ public class RepaymentService {
         String currencyText = repaymentRequest.currencyCode();
         Currency currency;
         long amount;
-        List<LedgerTransaction> list;
+        List<LedgerTransaction> outstandingLoansOwedBy;
         Map<String, String> errors = new HashMap<>();
-        Member debtor = members.findById(actorId).filter(Member::active)
+
+        Member member = members.findById(actorId).filter(Member::active)
                 .orElseThrow(() -> new NotPermittedException(actorId, "Member is inactive"));
-        LocalDate todaysDate = LocalDate.now(clock.withZone(debtor.timeZone()));
+
+        LocalDate todaysDate = LocalDate.now(clock.withZone(member.timeZone()));
 
         try {
             currency = Currency.getInstance(currencyText);
@@ -81,13 +98,40 @@ public class RepaymentService {
         if (repaymentRequest.submissionKey() != null) {
             Optional<LedgerTransaction> earlier = transactions
                     .findBySubmissionKey(actorId, repaymentRequest.submissionKey());
-            if (earlier.isPresent())
+            if (earlier.isPresent()) {
                 return new Outcome.Recorded(earlier.get(), true);
+            }
         }
 
-        list =  transactions.outstandingLoansOwedBy(actorId);
+        // The rules are about a loan. Anything else named in the request (a repayment,
+        // a correction) is refused here, before its parties could be mistaken for a
+        // borrower and a lender.
+        if (lockedItem.kind() != TransactionKind.LOAN) {
+            errors.put("loan", "ledger.repayment.loan.notOutstanding");
+            return new Outcome.Rejected(errors);
+        }
 
-        if(!list.stream().anyMatch(t -> t.id().equals(loanID))) {
+        // The three facts, read under the loan's lock, then one question to RepaymentRules,
+        // the same one Home asks for its Repay link (rules L4 to L7), so the two can't disagree.
+        boolean viewerIsBorrower = lockedItem.debtor().equals(actorId);
+        boolean lenderActive = members.findById(lockedItem.creditor()).map(Member::active).orElse(false);
+        boolean repaymentWaiting = transactions.hasPendingRepayment(loanID);
+
+        String refusal = switch (RepaymentRules.check(viewerIsBorrower, lenderActive, repaymentWaiting)) {
+            case REPAY -> null;                                                        // carry on
+            case LENDER_DEACTIVATED -> "ledger.repayment.loan.lenderDeactivated";      // Ledger.Repayment-11
+            case NONE, REPAYMENT_WAITING -> "ledger.repayment.loan.notOutstanding";    // not the borrower; T-Repay-8e
+        };
+        if (refusal != null) {
+            errors.put("loan", refusal);
+            return new Outcome.Rejected(errors);
+        }
+
+        // Still needed: RepaymentRules doesn't know whether the loan is approved and not
+        // already settled or reversed. That is the Outstanding test, in the query.
+        outstandingLoansOwedBy = transactions.outstandingLoansOwedBy(actorId);
+
+        if (outstandingLoansOwedBy.stream().noneMatch(t -> t.id().equals(loanID))) {
             errors.put("loan", "ledger.repayment.loan.notOutstanding");
             return new Outcome.Rejected(errors);
         }
